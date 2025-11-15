@@ -11,6 +11,8 @@ class NavigationAssistant {
         this.isRunning = false;
         this.model = null;
         this.lastVoiceTime = 0;
+        this.audioContext = null;
+        this.isAudioUnlocked = false;
         
         // Инициализация Telegram Web App
         this.tg = window.Telegram.WebApp;
@@ -28,11 +30,42 @@ class NavigationAssistant {
         // Настраиваем кнопку
         this.mainBtn.addEventListener('click', () => this.toggleNavigation());
         
+        // Разблокируем аудио при первом клике
+        this.unlockAudio();
+        
         // Загружаем нейросеть при старте
         await this.loadNeuralNetwork();
         
         this.updateStatus('Нейросеть загружена ✅');
         this.loading.style.display = 'none';
+    }
+
+    // Разблокировка аудио системы
+    unlockAudio() {
+        const unlock = () => {
+            if (!this.isAudioUnlocked) {
+                // Создаем и сразу останавливаем аудио контекст
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Создаем короткий беззвучный сигнал для разблокировки
+                const oscillator = this.audioContext.createOscillator();
+                const gainNode = this.audioContext.createGain();
+                gainNode.gain.value = 0; // Беззвучно!
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(this.audioContext.destination);
+                
+                oscillator.start();
+                oscillator.stop(this.audioContext.currentTime + 0.001);
+                
+                this.isAudioUnlocked = true;
+                console.log('✅ Аудио система разблокирована');
+            }
+        };
+
+        // Разблокируем при любом клике
+        document.addEventListener('click', unlock);
+        this.mainBtn.addEventListener('click', unlock);
     }
 
     // Загрузка нейросети COCO-SSD
@@ -94,7 +127,11 @@ class NavigationAssistant {
             this.mainBtn.style.background = '#ff4444';
             
             this.updateStatus('Навигация активна');
-            this.speak('Навигационный помощник активирован');
+            
+            // Запускаем приветственное сообщение с задержкой
+            setTimeout(() => {
+                this.speak('Навигационный помощник активирован');
+            }, 1000);
             
             // Запускаем обнаружение объектов
             this.startObjectDetection();
@@ -153,7 +190,7 @@ class NavigationAssistant {
         const now = Date.now();
         
         // Защита от спама голосовых сообщений
-        if (now - this.lastVoiceTime < 3000) return;
+        if (now - this.lastVoiceTime < 4000) return;
         
         // Определяем направление объекта
         const direction = this.getObjectDirection(prediction.bbox);
@@ -224,7 +261,6 @@ class NavigationAssistant {
             'laptop': 'ноутбук',
             'cell phone': 'телефон',
             'book': 'книга',
-            'cup': 'чашка',
             'bottle': 'бутылка',
             'bench': 'скамейка',
             'backpack': 'рюкзак',
@@ -243,20 +279,103 @@ class NavigationAssistant {
         return dangerousObjects.includes(className) && closeDistance;
     }
 
-    // Голосовое оповещение
+    // УЛУЧШЕННАЯ СИСТЕМА ГОЛОСОВЫХ ОПОВЕЩЕНИЙ
     speak(text) {
-        if ('speechSynthesis' in window) {
+        // Метод 1: Web Speech API с улучшенными настройками
+        if ('speechSynthesis' in window && this.isAudioUnlocked) {
+            this.speakWithImprovedTTS(text);
+        } else {
+            // Метод 2: Аудио сигналы как запасной вариант
+            this.playFallbackSound(text);
+        }
+    }
+
+    // Улучшенный TTS с разными голосами
+    speakWithImprovedTTS(text) {
+        try {
             // Останавливаем предыдущее сообщение
             speechSynthesis.cancel();
             
-            // Создаем новое сообщение
+            // Создаем новое сообщение с улучшенными настройками
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'ru-RU';
-            utterance.rate = 0.8;
-            utterance.pitch = 1.0;
             
-            // Произносим
-            speechSynthesis.speak(utterance);
+            // ОПТИМАЛЬНЫЕ НАСТРОЙКИ ДЛЯ ЕСТЕСТВЕННОСТИ
+            utterance.lang = 'ru-RU';
+            utterance.rate = 0.85;    // Немного медленнее для естественности
+            utterance.pitch = 1.1;    // Чуть выше для лучшей разборчивости
+            utterance.volume = 1.0;
+            
+            // Пытаемся найти лучший голос
+            const voices = speechSynthesis.getVoices();
+            const russianVoice = voices.find(voice => 
+                voice.lang.includes('ru') || voice.lang.includes('RU')
+            );
+            
+            if (russianVoice) {
+                utterance.voice = russianVoice;
+                console.log('✅ Используем русский голос:', russianVoice.name);
+            }
+            
+            // Обработчики событий для отладки
+            utterance.onstart = () => {
+                console.log('🔊 Начало речи:', text);
+            };
+            
+            utterance.onend = () => {
+                console.log('🔊 Конец речи');
+            };
+            
+            utterance.onerror = (event) => {
+                console.error('❌ Ошибка речи:', event.error);
+                // Пробуем запасной метод
+                this.playFallbackSound(text);
+            };
+            
+            // Произносим с небольшой задержкой
+            setTimeout(() => {
+                speechSynthesis.speak(utterance);
+            }, 100);
+            
+        } catch (error) {
+            console.error('❌ Ошибка TTS:', error);
+            this.playFallbackSound(text);
+        }
+    }
+
+    // Запасная система звуковых сигналов
+    playFallbackSound(text) {
+        if (!this.audioContext) {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        
+        try {
+            const oscillator = this.audioContext.createOscillator();
+            const gainNode = this.audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(this.audioContext.destination);
+            
+            // Разные тона для разных типов сообщений
+            if (text.includes('Внимание')) {
+                // Высокие прерывистые сигналы для опасности
+                oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime);
+                oscillator.frequency.setValueAtTime(600, this.audioContext.currentTime + 0.1);
+                oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime + 0.2);
+            } else {
+                // Плавный тон для обычных сообщений
+                oscillator.frequency.setValueAtTime(400, this.audioContext.currentTime);
+            }
+            
+            gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.5);
+            
+            oscillator.start(this.audioContext.currentTime);
+            oscillator.stop(this.audioContext.currentTime + 0.5);
+            
+            console.log('🔊 Аудио сигнал для:', text);
+            
+        } catch (error) {
+            console.error('❌ Ошибка аудио сигнала:', error);
         }
     }
 
@@ -286,6 +405,21 @@ class NavigationAssistant {
 }
 
 // Инициализация при загрузке страницы
-window.addEventListener('load', () => {
-    new NavigationAssistant();
+document.addEventListener('DOMContentLoaded', () => {
+    // Ждем загрузки голосов
+    if (speechSynthesis.onvoiceschanged !== undefined) {
+        speechSynthesis.onvoiceschanged = () => {
+            new NavigationAssistant();
+        };
+    } else {
+        new NavigationAssistant();
+    }
 });
+
+// Глобальная функция для тестирования голоса
+window.testVoice = function() {
+    const test = new NavigationAssistant();
+    setTimeout(() => {
+        test.speak('Тестовое сообщение для проверки голоса');
+    }, 1000);
+};
