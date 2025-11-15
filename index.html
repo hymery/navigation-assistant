@@ -85,22 +85,6 @@
             text-align: center;
         }
         
-        .progress-bar {
-            width: 80%;
-            height: 6px;
-            background: #333;
-            margin: 10px auto;
-            border-radius: 3px;
-            overflow: hidden;
-        }
-        
-        .progress {
-            height: 100%;
-            background: #00ff00;
-            width: 0%;
-            transition: width 0.3s;
-        }
-        
         .warning {
             background: #ff4444;
             color: white;
@@ -120,26 +104,19 @@
     
     <div class="video-container">
         <video id="webcam" autoplay playsinline muted></video>
-        <div class="loading" id="loading">
-            Загрузка системы...<br>
-            <div class="progress-bar">
-                <div class="progress" id="progress"></div>
-            </div>
-            <small id="progressText">Подготовка...</small>
-        </div>
+        <div class="loading" id="loading">Загрузка...</div>
     </div>
     
     <div class="controls">
-        <button class="main-btn" id="mainBtn" disabled>🚀 ЗАГРУЗКА СИСТЕМЫ...</button>
+        <button class="main-btn" id="mainBtn" disabled>Загрузка системы...</button>
     </div>
     
     <div class="status" id="status">Инициализация...</div>
     
     <div class="warning" id="warning"></div>
 
-    <!-- Оптимизированная загрузка TensorFlow.js -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.10.0/dist/tf-core.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.10.0/dist/tf-backend-webgl.min.js"></script>
+    <!-- TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
     
     <script src="app.js"></script>
