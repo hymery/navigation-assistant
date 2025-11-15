@@ -55,11 +55,17 @@
             font-size: 20px;
             font-weight: bold;
             cursor: pointer;
+            transition: all 0.3s;
         }
         
         .main-btn:disabled {
             background: #666666;
             cursor: not-allowed;
+        }
+        
+        .main-btn.stop {
+            background: #ff4444;
+            color: white;
         }
         
         .status {
@@ -85,6 +91,22 @@
             text-align: center;
         }
         
+        .progress-bar {
+            width: 80%;
+            height: 6px;
+            background: #333;
+            margin: 10px auto;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .progress {
+            height: 100%;
+            background: #00ff00;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
         .warning {
             background: #ff4444;
             color: white;
@@ -94,30 +116,56 @@
             border-radius: 10px;
             display: none;
             font-weight: bold;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        
+        .objects-list {
+            padding: 10px;
+            background: #1a1a1a;
+            max-height: 100px;
+            overflow-y: auto;
+            font-size: 12px;
+            color: #ccc;
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <h2>🧭 Навигационный помощник</h2>
+        <h2>🧭 Навигационный помощник AI</h2>
     </div>
     
     <div class="video-container">
         <video id="webcam" autoplay playsinline muted></video>
-        <div class="loading" id="loading">Загрузка...</div>
+        <div class="loading" id="loading">
+            Загрузка AI моделей...<br>
+            <div class="progress-bar">
+                <div class="progress" id="progress"></div>
+            </div>
+            <small id="progressText">Инициализация...</small>
+        </div>
     </div>
     
     <div class="controls">
-        <button class="main-btn" id="mainBtn" disabled>Загрузка системы...</button>
+        <button class="main-btn" id="mainBtn" disabled>🔄 ЗАГРУЗКА МОДЕЛЕЙ...</button>
     </div>
     
-    <div class="status" id="status">Инициализация...</div>
+    <div class="status" id="status">Загрузка нейросетей...</div>
     
     <div class="warning" id="warning"></div>
+    
+    <div class="objects-list" id="objectsList"></div>
 
-    <!-- TensorFlow.js -->
+    <!-- TensorFlow.js и все модели -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.0.0/dist/body-pix.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.0.0/dist/pose-detection.min.js"></script>
     
     <script src="app.js"></script>
 </body>
