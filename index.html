@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Навигационный помощник для слабовидящих</title>
+    <title>Навигационный помощник</title>
     <style>
         * {
             margin: 0;
@@ -11,239 +11,81 @@
             box-sizing: border-box;
         }
         body {
-            font-family: 'Arial', sans-serif;
+            font-family: Arial, sans-serif;
             background: #000000;
             color: #ffffff;
-            padding: 20px;
-            line-height: 1.6;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
-        h1 {
-            text-align: center;
-            color: #00ff00;
-            margin-bottom: 20px;
-            font-size: 28px;
-            text-shadow: 0 0 10px #00ff00;
-        }
-        .btn {
-            padding: 18px 30px;
-            margin: 10px;
+
+        /* Главная кнопка */
+        .main-button {
+            background: #00ff00;
+            color: #000000;
             border: none;
-            border-radius: 15px;
-            font-size: 20px;
-            cursor: pointer;
+            padding: 30px;
+            font-size: 32px;
             font-weight: bold;
-            min-width: 180px;
-            transition: all 0.3s ease;
+            cursor: pointer;
+            border-radius: 0;
+            min-height: 120px;
         }
-        .btn:hover {
-            transform: scale(1.05);
+        .main-button:disabled {
+            background: #666666;
+            color: #cccccc;
         }
-        .btn:disabled {
-            background: #666666 !important;
-            cursor: not-allowed;
-            transform: none;
-        }
-        .primary {
-            background: #007bff;
-            color: white;
-            border: 2px solid #0056b3;
-        }
-        .secondary {
-            background: #dc3545;
-            color: white;
-            border: 2px solid #a71e2a;
-        }
-        .controls {
-            text-align: center;
-            margin: 25px 0;
-        }
-        .status {
-            text-align: center;
-            margin: 20px 0;
-            padding: 15px;
-            background: #1a1a1a;
-            border-radius: 10px;
-            font-size: 18px;
-            border: 1px solid #333;
-            min-height: 60px;
+
+        /* Панель видео */
+        .video-panel {
+            flex: 1;
+            background: #000000;
             display: flex;
             align-items: center;
             justify-content: center;
-        }
-        .video-container {
-            width: 100%;
-            max-width: 500px;
-            margin: 25px auto;
-            border: 4px solid #00ff00;
-            border-radius: 15px;
-            position: relative;
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+            border: 8px solid #00ff00;
+            margin: 10px;
+            border-radius: 20px;
         }
         #webcam {
             width: 100%;
-            display: block;
+            height: 100%;
+            object-fit: cover;
             border-radius: 12px;
-            background: #000;
         }
-        .detections {
-            background: #1a1a1a;
-            padding: 20px;
-            border-radius: 12px;
-            margin: 25px 0;
-            min-height: 150px;
-            border: 1px solid #333;
-        }
-        .detections h3 {
-            margin-bottom: 15px;
-            color: #00ff00;
-            font-size: 22px;
+
+        /* Минимальный статус */
+        .status {
+            background: #00ff00;
+            color: #000000;
+            padding: 15px;
             text-align: center;
-        }
-        .detection-item {
-            padding: 12px 15px;
-            margin: 10px 0;
-            background: #2d2d2d;
-            border-radius: 8px;
-            border-left: 6px solid #007bff;
-            font-size: 16px;
-            transition: all 0.3s ease;
-        }
-        .detection-item.critical {
-            border-left: 6px solid #ff4444 !important;
-            background: #3a1a1a !important;
-            animation: pulse 2s infinite;
-        }
-        .warning {
-            background: linear-gradient(135deg, #ff4444, #cc0000);
-            color: white;
-            padding: 20px 25px;
-            border-radius: 12px;
-            font-weight: bold;
-            text-align: center;
-            margin: 20px 0;
-            display: none;
             font-size: 20px;
-            border: 2px solid #ff0000;
-            box-shadow: 0 0 25px rgba(255, 0, 0, 0.5);
+            font-weight: bold;
         }
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.7; }
-            100% { opacity: 1; }
-        }
-        .info {
+
+        /* Простое предупреждение */
+        .warning {
+            background: #ff0000;
+            color: #ffffff;
+            padding: 20px;
             text-align: center;
-            font-size: 16px;
-            color: #888;
-            margin: 15px 0;
-            padding: 12px;
-            background: #1a1a1a;
-            border-radius: 8px;
-            border: 1px solid #333;
-        }
-        .objects-count {
-            text-align: center;
-            font-size: 14px;
-            color: #00ff00;
-            margin-top: 10px;
-        }
-
-        /* Высокий контраст для слабовидящих */
-        @media (prefers-contrast: high) {
-            body {
-                background: #000000;
-                color: #ffffff;
-            }
-            .btn.primary {
-                background: #ffff00;
-                color: #000000;
-                border: 3px solid #000000;
-            }
-            .detection-item {
-                background: #ffffff;
-                color: #000000;
-                border-left: 6px solid #0000ff;
-            }
-            .detection-item.critical {
-                background: #ff0000 !important;
-                color: #ffffff !important;
-                border-left: 6px solid #000000 !important;
-            }
-            .warning {
-                background: #ff0000;
-                color: #ffffff;
-                border: 3px solid #000000;
-            }
-        }
-
-        /* Адаптивность */
-        @media (max-width: 768px) {
-            .btn {
-                padding: 15px 20px;
-                font-size: 18px;
-                min-width: 160px;
-            }
-            h1 {
-                font-size: 24px;
-            }
-            .status {
-                font-size: 16px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            body {
-                padding: 15px;
-            }
-            .btn {
-                padding: 12px 15px;
-                font-size: 16px;
-                min-width: 140px;
-                margin: 5px;
-            }
-            .video-container {
-                max-width: 100%;
-            }
+            font-size: 24px;
+            font-weight: bold;
+            display: none;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🧭 НАВИГАЦИОННЫЙ ПОМОЩНИК</h1>
-        <div class="info">
-            Система компьютерного зрения с голосовым интерфейсом для слабовидящих
-        </div>
+    <button id="mainBtn" class="main-button">🚀 ЗАПУСК НАВИГАЦИИ</button>
 
-        <div class="controls">
-            <button id="startBtn" class="btn primary">🚀 ЗАПУСК КАМЕРЫ</button>
-            <button id="stopBtn" class="btn secondary" disabled>⏹ ОСТАНОВИТЬ</button>
-        </div>
-
-        <div id="status" class="status">Статус: Загрузка системы...</div>
-
-        <div class="video-container">
-            <video id="webcam" autoplay playsinline muted></video>
-        </div>
-
-        <div class="info">
-            🔍 Режим: Стабильное обнаружение | 🎯 Объекты: люди, транспорт, препятствия
-        </div>
-
-        <div class="detections">
-            <h3>🎯 ОБНАРУЖЕННЫЕ ОБЪЕКТЫ</h3>
-            <div id="objectsList">Ожидание запуска камеры...</div>
-            <div id="objectsCount" class="objects-count"></div>
-        </div>
-
-        <div id="warning" class="warning"></div>
-
-        <div class="info">
-            💡 Голосовые оповещения: "Внимание! объект направление расстояние"<br>
-            ⚠️ Красные предупреждения: критические объекты ближе 5 метров
-        </div>
+    <div class="video-panel">
+        <video id="webcam" autoplay playsinline muted></video>
     </div>
 
-    <!-- TensorFlow.js для нейронной сети -->
+    <div id="status" class="status">Нажмите кнопку для запуска</div>
+    <div id="warning" class="warning"></div>
+
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
     <script src="app.js"></script>
 </body>
