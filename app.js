@@ -1,211 +1,291 @@
+// Главный класс навигационного помощника
 class NavigationAssistant {
     constructor() {
-        this.isRunning = false;
+        // Основные элементы
         this.video = document.getElementById('webcam');
         this.mainBtn = document.getElementById('mainBtn');
         this.status = document.getElementById('status');
-        this.warning = document.getElementById('warning');
+        this.loading = document.getElementById('loading');
         
+        // Состояние системы
+        this.isRunning = false;
+        this.model = null;
         this.lastVoiceTime = 0;
-        this.voiceCooldown = 4000;
-        this.isAudioEnabled = false;
+        
+        // Инициализация Telegram Web App
+        this.tg = window.Telegram.WebApp;
         
         this.init();
     }
 
     async init() {
+        console.log('🚀 Инициализация навигационного помощника...');
+        
+        // Инициализируем Telegram Web App
+        this.tg.expand();
+        this.tg.enableClosingConfirmation();
+        
+        // Настраиваем кнопку
         this.mainBtn.addEventListener('click', () => this.toggleNavigation());
-        this.enableAudio();
+        
+        // Загружаем нейросеть при старте
+        await this.loadNeuralNetwork();
+        
+        this.updateStatus('Нейросеть загружена ✅');
+        this.loading.style.display = 'none';
     }
 
-    enableAudio() {
-        document.addEventListener('click', () => {
-            if (!this.isAudioEnabled) {
-                this.isAudioEnabled = true;
-            }
-        }, { once: true });
-    }
-
-    async toggleNavigation() {
-        if (this.isRunning) {
-            this.stop();
-        } else {
-            await this.start();
+    // Загрузка нейросети COCO-SSD
+    async loadNeuralNetwork() {
+        try {
+            this.updateStatus('Загрузка нейросети...');
+            
+            // Загружаем модель COCO-SSD
+            this.model = await cocoSsd.load({
+                base: 'mobilenet_v2'
+            });
+            
+            console.log('✅ Нейросеть загружена');
+            this.updateStatus('Нейросеть готова');
+            
+        } catch (error) {
+            console.error('❌ Ошибка загрузки нейросети:', error);
+            this.updateStatus('Ошибка загрузки нейросети');
         }
     }
 
-    async start() {
+    // Переключение навигации
+    async toggleNavigation() {
+        if (this.isRunning) {
+            this.stopNavigation();
+        } else {
+            await this.startNavigation();
+        }
+    }
+
+    // Запуск навигации
+    async startNavigation() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { 
+            this.updateStatus('Запуск камеры...');
+            
+            // Запрашиваем доступ к камере
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
                     facingMode: 'environment',
                     width: { ideal: 640 },
                     height: { ideal: 480 }
-                } 
+                }
             });
             
+            // Подключаем поток к видео
             this.video.srcObject = stream;
+            
+            // Ждем загрузки видео
+            await new Promise((resolve) => {
+                this.video.onloadedmetadata = () => {
+                    this.video.play();
+                    resolve();
+                };
+            });
+            
+            // Обновляем интерфейс
             this.isRunning = true;
-            this.mainBtn.textContent = '⏹ ОСТАНОВИТЬ';
-            this.mainBtn.style.background = '#ff0000';
-            this.mainBtn.style.color = '#ffffff';
+            this.mainBtn.textContent = '⏹ ОСТАНОВИТЬ НАВИГАЦИЮ';
+            this.mainBtn.style.background = '#ff4444';
             
             this.updateStatus('Навигация активна');
-            this.speak('Навигационный помощник запущен');
+            this.speak('Навигационный помощник активирован');
             
-            this.startDetection();
+            // Запускаем обнаружение объектов
+            this.startObjectDetection();
             
         } catch (error) {
+            console.error('❌ Ошибка камеры:', error);
             this.updateStatus('Ошибка доступа к камере');
+            this.speak('Не удалось запустить камеру');
         }
     }
 
-    startDetection() {
-        if (!this.isRunning) return;
-
-        // УМНОЕ ОПРЕДЕЛЕНИЕ ОБЪЕКТОВ НА ОСНОВЕ РЕАЛЬНОГО АНАЛИЗА
-        const detectedObject = this.analyzeEnvironment();
-        this.processDetection(detectedObject);
-
-        setTimeout(() => this.startDetection(), 3000);
-    }
-
-    analyzeEnvironment() {
-        // Анализируем реальное окружение вместо рандома
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+    // Основной цикл обнаружения объектов
+    async startObjectDetection() {
+        if (!this.isRunning || !this.model) return;
         
         try {
-            canvas.width = this.video.videoWidth;
-            canvas.height = this.video.videoHeight;
-            ctx.drawImage(this.video, 0, 0);
+            // Обнаружение объектов с помощью нейросети
+            const predictions = await this.model.detect(this.video);
             
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const analysis = this.analyzeImage(imageData);
-            
-            return this.getObjectFromAnalysis(analysis);
+            // Обрабатываем результаты
+            this.processPredictions(predictions);
             
         } catch (error) {
-            return this.getSmartFallbackObject();
+            console.error('❌ Ошибка обнаружения:', error);
         }
-    }
-
-    analyzeImage(imageData) {
-        const data = imageData.data;
-        let brightness = 0;
-        let colorVariance = 0;
-        let movementScore = 0;
         
-        // Анализ яркости
-        for (let i = 0; i < data.length; i += 4) {
-            brightness += (data[i] + data[i + 1] + data[i + 2]) / 3;
+        // Продолжаем каждые 2 секунды
+        if (this.isRunning) {
+            setTimeout(() => this.startObjectDetection(), 2000);
         }
-        brightness = brightness / (data.length / 4);
+    }
+
+    // Обработка обнаруженных объектов
+    processPredictions(predictions) {
+        // Фильтруем только уверенные предсказания
+        const confidentPredictions = predictions.filter(pred => pred.score > 0.6);
         
-        // Анализ цветового разнообразия (признак сложных объектов)
-        const colorCount = new Set();
-        for (let i = 0; i < data.length; i += 16) { // Увеличиваем шаг для производительности
-            const color = `${data[i]},${data[i+1]},${data[i+2]}`;
-            colorCount.add(color);
+        if (confidentPredictions.length === 0) {
+            this.updateStatus('Объекты не обнаружены');
+            return;
         }
-        colorVariance = colorCount.size;
         
-        return { brightness, colorVariance };
-    }
-
-    getObjectFromAnalysis(analysis) {
-        const { brightness, colorVariance } = analysis;
+        // Сортируем по уверенности
+        confidentPredictions.sort((a, b) => b.score - a.score);
         
-        // ЛОГИКА ОПРЕДЕЛЕНИЯ ОБЪЕКТОВ НА ОСНОВЕ РЕАЛЬНЫХ ДАННЫХ
-        if (brightness < 50) {
-            return { class: 'стена', distance: '2.1', direction: 'впереди', isCritical: true };
-        }
-        else if (brightness > 200 && colorVariance > 1000) {
-            return { class: 'окно', distance: '4.5', direction: 'впереди', isCritical: false };
-        }
-        else if (colorVariance > 2000) {
-            return { class: 'человек', distance: '3.8', direction: this.getDirection(), isCritical: false };
-        }
-        else if (brightness > 150 && colorVariance < 1000) {
-            return { class: 'дверь', distance: '5.2', direction: this.getDirection(), isCritical: false };
-        }
-        else if (colorVariance < 500) {
-            return { class: 'пустота', distance: '10.0', direction: 'впереди', isCritical: false };
-        }
-        else {
-            return this.getSmartFallbackObject();
-        }
+        // Берем 2 самых уверенных объекта
+        const mainObjects = confidentPredictions.slice(0, 2);
+        
+        // Обрабатываем главный объект
+        const mainObject = mainObjects[0];
+        this.processMainObject(mainObject);
     }
 
-    getSmartFallbackObject() {
-        // Умные fallback-объекты на основе времени и вероятности
-        const objects = [
-            { class: 'свободно', distance: '8.0', direction: 'впереди', isCritical: false },
-            { class: 'пространство', distance: '6.5', direction: 'впереди', isCritical: false },
-            { class: 'открыто', distance: '12.0', direction: 'впереди', isCritical: false }
-        ];
-        return objects[Math.floor(Math.random() * objects.length)];
-    }
-
-    getDirection() {
-        const directions = ['слева', 'справа', 'впереди'];
-        return directions[Math.floor(Math.random() * directions.length)];
-    }
-
-    processDetection(object) {
+    // Обработка главного объекта
+    processMainObject(prediction) {
         const now = Date.now();
         
-        if (object.isCritical && now - this.lastVoiceTime >= this.voiceCooldown) {
-            this.warning.textContent = `⚠️ ${object.class} ${object.direction}`;
-            this.warning.style.display = 'block';
-            this.speak(`Внимание! ${object.class} ${object.direction}`);
-            this.lastVoiceTime = now;
-        }
-        else if (!object.isCritical && now - this.lastVoiceTime >= this.voiceCooldown) {
-            this.warning.style.display = 'none';
-            this.speak(`${object.class} ${object.direction}`);
-            this.lastVoiceTime = now;
+        // Защита от спама голосовых сообщений
+        if (now - this.lastVoiceTime < 3000) return;
+        
+        // Определяем направление объекта
+        const direction = this.getObjectDirection(prediction.bbox);
+        
+        // Определяем расстояние (приблизительно)
+        const distance = this.estimateDistance(prediction.bbox);
+        
+        // Русское название объекта
+        const objectName = this.getRussianName(prediction.class);
+        
+        // Проверяем опасность объекта
+        const isDangerous = this.isObjectDangerous(prediction.class, distance);
+        
+        // Голосовое оповещение
+        if (isDangerous) {
+            this.speak(`Внимание! ${objectName} ${direction} в ${distance} метрах`);
+            this.updateStatus(`⚠️ ${objectName} ${direction} • ${distance}м`);
+        } else {
+            this.speak(`${objectName} ${direction} в ${distance} метрах`);
+            this.updateStatus(`${objectName} ${direction} • ${distance}м`);
         }
         
-        this.updateStatus(`${object.class} ${object.direction} • ${object.distance}м`);
+        this.lastVoiceTime = now;
     }
 
+    // Определение направления объекта
+    getObjectDirection(bbox) {
+        const [x, y, width, height] = bbox;
+        const centerX = x + width / 2;
+        const screenThird = this.video.videoWidth / 3;
+        
+        if (centerX < screenThird) return 'слева';
+        if (centerX > 2 * screenThird) return 'справа';
+        return 'впереди';
+    }
+
+    // Приблизительная оценка расстояния
+    estimateDistance(bbox) {
+        const [x, y, width, height] = bbox;
+        
+        // Чем больше объект на экране - тем он ближе
+        const objectSize = width * height;
+        const maxSize = this.video.videoWidth * this.video.videoHeight;
+        const relativeSize = objectSize / maxSize;
+        
+        // Преобразуем в метры
+        if (relativeSize > 0.3) return '1-2';
+        if (relativeSize > 0.15) return '3-4';
+        if (relativeSize > 0.05) return '5-7';
+        return '8-10';
+    }
+
+    // Русские названия объектов
+    getRussianName(englishName) {
+        const dictionary = {
+            'person': 'человек',
+            'car': 'автомобиль',
+            'truck': 'грузовик',
+            'bus': 'автобус',
+            'bicycle': 'велосипед',
+            'motorcycle': 'мотоцикл',
+            'cat': 'кошка',
+            'dog': 'собака',
+            'chair': 'стул',
+            'dining table': 'стол',
+            'potted plant': 'растение',
+            'tv': 'телевизор',
+            'laptop': 'ноутбук',
+            'cell phone': 'телефон',
+            'book': 'книга',
+            'cup': 'чашка',
+            'bottle': 'бутылка',
+            'bench': 'скамейка',
+            'backpack': 'рюкзак',
+            'umbrella': 'зонт',
+            'handbag': 'сумка'
+        };
+        
+        return dictionary[englishName] || englishName;
+    }
+
+    // Проверка опасности объекта
+    isObjectDangerous(className, distance) {
+        const dangerousObjects = ['car', 'truck', 'bus', 'motorcycle'];
+        const closeDistance = distance.includes('1-2') || distance.includes('3-4');
+        
+        return dangerousObjects.includes(className) && closeDistance;
+    }
+
+    // Голосовое оповещение
     speak(text) {
-        if ('speechSynthesis' in window && this.isAudioEnabled) {
+        if ('speechSynthesis' in window) {
+            // Останавливаем предыдущее сообщение
             speechSynthesis.cancel();
             
+            // Создаем новое сообщение
             const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'ru-RU';
             utterance.rate = 0.8;
             utterance.pitch = 1.0;
-            utterance.volume = 1.0;
-            utterance.lang = 'ru-RU';
             
+            // Произносим
             speechSynthesis.speak(utterance);
         }
     }
 
-    stop() {
+    // Остановка навигации
+    stopNavigation() {
         this.isRunning = false;
+        
+        // Останавливаем речь
         speechSynthesis.cancel();
         
+        // Отключаем камеру
         if (this.video.srcObject) {
             this.video.srcObject.getTracks().forEach(track => track.stop());
             this.video.srcObject = null;
         }
         
-        this.mainBtn.textContent = '🚀 ЗАПУСК НАВИГАЦИИ';
+        // Обновляем интерфейс
+        this.mainBtn.textContent = '🚀 АКТИВИРОВАТЬ НАВИГАЦИЮ';
         this.mainBtn.style.background = '#00ff00';
-        this.mainBtn.style.color = '#000000';
-        this.updateStatus('Нажмите для запуска');
-        this.warning.style.display = 'none';
+        this.updateStatus('Навигация остановлена');
     }
 
+    // Обновление статуса
     updateStatus(message) {
         this.status.textContent = message;
     }
 }
 
-// Запуск при загрузке
+// Инициализация при загрузке страницы
 window.addEventListener('load', () => {
     new NavigationAssistant();
 });
