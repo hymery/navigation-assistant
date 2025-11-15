@@ -6,105 +6,111 @@
     <title>Навигационный помощник</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+        }
         body { 
             font-family: Arial, sans-serif; 
             background: #000000; 
             color: #ffffff; 
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: #000000;
             padding: 20px;
+            text-align: center;
+            border-bottom: 3px solid #00ff00;
         }
         
-        h1 { 
-            text-align: center; 
-            color: #00ff00; 
-            margin-bottom: 20px;
-            font-size: 24px;
+        h1 {
+            color: #00ff00;
+            font-size: 28px;
+            font-weight: bold;
         }
         
-        .video-container { 
-            width: 100%; 
-            max-width: 500px; 
-            margin: 20px auto; 
-            border: 4px solid #00ff00; 
-            border-radius: 15px;
-            overflow: hidden;
+        .video-container {
+            flex: 1;
+            background: #000000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 4px solid #00ff00;
+            margin: 10px;
         }
         
-        #webcam { 
-            width: 100%; 
-            display: block; 
-            background: #000;
+        #webcam {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
         
         .controls {
-            text-align: center;
-            margin: 20px 0;
+            padding: 20px;
+            background: #000000;
         }
         
         .main-btn {
-            padding: 20px 40px;
+            width: 100%;
+            padding: 25px;
             background: #00ff00;
             color: #000000;
             border: none;
-            border-radius: 12px;
-            font-size: 20px;
+            border-radius: 0;
+            font-size: 24px;
             font-weight: bold;
             cursor: pointer;
-            min-width: 250px;
         }
         
-        .main-btn.stop {
-            background: #ff4444;
-            color: white;
+        .main-btn:disabled {
+            background: #666666;
+            color: #cccccc;
+            cursor: not-allowed;
         }
         
         .status {
-            text-align: center; 
-            margin: 15px 0; 
-            padding: 15px;
-            background: #1a1a1a;
-            border-radius: 10px;
-            font-size: 16px;
-            color: #00ff00;
-        }
-        
-        .warning {
-            background: #ff4444;
-            color: white;
+            background: #00ff00;
+            color: #000000;
             padding: 15px;
             text-align: center;
-            margin: 15px 0;
-            border-radius: 10px;
-            display: none;
+            font-size: 18px;
             font-weight: bold;
         }
         
-        .loading {
-            text-align: center;
-            color: #00ff00;
+        .warning {
+            background: #ff0000;
+            color: #ffffff;
             padding: 20px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            display: none;
         }
     </style>
 </head>
 <body>
-    <h1>🧭 Навигационный помощник</h1>
+    <div class="header">
+        <h1>🧭 НАВИГАЦИОННЫЙ ПОМОЩНИК</h1>
+    </div>
     
     <div class="video-container">
         <video id="webcam" autoplay playsinline muted></video>
     </div>
     
     <div class="controls">
-        <button class="main-btn" id="mainBtn" disabled>Загрузка модели...</button>
+        <button class="main-btn" id="mainBtn" disabled>ЗАГРУЗКА МОДЕЛИ...</button>
     </div>
     
     <div class="status" id="status">Загрузка нейросети...</div>
     
     <div class="warning" id="warning"></div>
 
-    <!-- TensorFlow.js и COCO-SSD -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
-    
     <script src="app.js"></script>
 </body>
 </html>
