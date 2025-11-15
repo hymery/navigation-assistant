@@ -30,6 +30,7 @@
             border: 3px solid #00ff00;
             margin: 10px;
             border-radius: 15px;
+            overflow: hidden;
         }
         
         #webcam {
@@ -56,6 +57,11 @@
             cursor: pointer;
         }
         
+        .main-btn:disabled {
+            background: #666666;
+            cursor: not-allowed;
+        }
+        
         .status {
             padding: 15px;
             text-align: center;
@@ -63,6 +69,10 @@
             color: #00ff00;
             font-size: 16px;
             border-top: 2px solid #00ff00;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
         .loading {
@@ -72,6 +82,34 @@
             transform: translate(-50%, -50%);
             color: #00ff00;
             font-size: 18px;
+            text-align: center;
+        }
+        
+        .progress-bar {
+            width: 80%;
+            height: 6px;
+            background: #333;
+            margin: 10px auto;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .progress {
+            height: 100%;
+            background: #00ff00;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .warning {
+            background: #ff4444;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            margin: 10px;
+            border-radius: 10px;
+            display: none;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -82,18 +120,26 @@
     
     <div class="video-container">
         <video id="webcam" autoplay playsinline muted></video>
-        <div class="loading" id="loading">Загрузка нейросети...</div>
+        <div class="loading" id="loading">
+            Загрузка системы...<br>
+            <div class="progress-bar">
+                <div class="progress" id="progress"></div>
+            </div>
+            <small id="progressText">Подготовка...</small>
+        </div>
     </div>
     
     <div class="controls">
-        <button class="main-btn" id="mainBtn">🚀 АКТИВИРОВАТЬ НАВИГАЦИЮ</button>
+        <button class="main-btn" id="mainBtn" disabled>🚀 ЗАГРУЗКА СИСТЕМЫ...</button>
     </div>
     
-    <div class="status" id="status">Готов к работе</div>
+    <div class="status" id="status">Инициализация...</div>
+    
+    <div class="warning" id="warning"></div>
 
-    <!-- TensorFlow.js для нейросети -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
-    <!-- COCO-SSD модель для обнаружения объектов -->
+    <!-- Оптимизированная загрузка TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.10.0/dist/tf-core.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.10.0/dist/tf-backend-webgl.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
     
     <script src="app.js"></script>
