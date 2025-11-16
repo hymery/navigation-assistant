@@ -44,6 +44,9 @@ class NavigationAssistant {
                 this.speechSynthesizer = {
                     speakText: (text) => {
                         this.fallbackSpeak(text);
+                    },
+                    quickSpeak: (text) => {
+                        this.fallbackSpeak(text);
                     }
                 };
                 this.updateDebug('Озвучка: стандартный синтез');
@@ -59,9 +62,10 @@ class NavigationAssistant {
             this.updateStatus('🔄 ЗАГРУЗКА НЕЙРОСЕТИ...');
             this.updateDebug('Проверка TensorFlow...');
             
-            // Проверяем загрузку TensorFlow
+            // Ждем полной загрузки TensorFlow
             if (typeof tf === 'undefined') {
-                throw new Error('TensorFlow.js не загружен');
+                this.updateDebug('Ожидание TensorFlow...');
+                await this.waitForTensorFlow();
             }
             
             if (typeof cocoSsd === 'undefined') {
@@ -70,7 +74,7 @@ class NavigationAssistant {
             
             this.updateDebug('Начинаем загрузку модели...');
             
-            // Загружаем модель
+            // ПРОСТАЯ ЗАГРУЗКА БЕЗ ТАЙМАУТОВ
             this.model = await cocoSsd.load();
             
             console.log('✅ Модель загружена!', this.model);
@@ -90,9 +94,58 @@ class NavigationAssistant {
             this.updateStatus('❌ ОШИБКА ЗАГРУЗКИ');
             this.updateDebug('Ошибка: ' + error.message);
             
-            this.mainBtn.textContent = '🚀 АКТИВИРОВАТЬ (БЕЗ AI)';
+            // СОЗДАЕМ ЗАГЛУШКУ ДЛЯ ТЕСТИРОВАНИЯ
+            this.createMockModel();
+            
+            this.mainBtn.textContent = '🚀 АКТИВИРОВАТЬ (ТЕСТ РЕЖИМ)';
             this.mainBtn.disabled = false;
         }
+    }
+
+    // Ожидание загрузки TensorFlow
+    waitForTensorFlow() {
+        return new Promise((resolve, reject) => {
+            let attempts = 0;
+            const checkTF = () => {
+                attempts++;
+
+if (typeof tf !== 'undefined') {
+                    resolve();
+                } else if (attempts > 50) { // 10 секунд
+                    reject(new Error('TensorFlow не загрузился'));
+                } else {
+                    setTimeout(checkTF, 200);
+                }
+            };
+            checkTF();
+        });
+    }
+
+    // Заглушка модели для тестирования
+    createMockModel() {
+        console.log('🔄 Создаем тестовую модель...');
+        this.model = {
+            detect: async (video) => {
+                // Имитация обнаружения объектов
+                const mockDetections = [
+                    {
+                        bbox: [100, 100, 200, 300],
+                        class: 'person',
+                        score: 0.95
+                    },
+                    {
+                        bbox: [300, 150, 100, 150],
+                        class: 'chair',
+                        score: 0.87
+                    }
+                ];
+                
+                // Случайно возвращаем объекты или пустой массив
+                return Math.random() > 0.3 ? mockDetections : [];
+            }
+        };
+        this.updateDebug('✅ Тестовая модель создана');
+        this.speak('Включен тестовый режим');
     }
 
     async toggleNavigation() {
@@ -111,9 +164,7 @@ class NavigationAssistant {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { 
                     facingMode: 'environment',
-
-
-width: { ideal: 640 },
+                    width: { ideal: 640 },
                     height: { ideal: 480 }
                 }
             });
@@ -177,7 +228,7 @@ width: { ideal: 640 },
             .sort((a, b) => b.score - a.score);
     }
 
-    processObjects(objects) {
+processObjects(objects) {
         if (objects.length === 0) {
             this.updateStatus('👁️ ОБЪЕКТЫ НЕ ОБНАРУЖЕНЫ');
             
@@ -228,7 +279,7 @@ width: { ideal: 640 },
         return 'впереди';
     }
 
-getDistance(bbox) {
+    getDistance(bbox) {
         const [, , width, height] = bbox;
         const size = width * height;
         
@@ -264,8 +315,10 @@ getDistance(bbox) {
     }
 
     speak(text) {
-        if (this.speechSynthesizer && this.speechSynthesizer.speakText) {
-            this.speechSynthesizer.speakText(text);
+        console.log('🔊 Озвучка:', text);
+        
+        if (this.speechSynthesizer && this.speechSynthesizer.quickSpeak) {
+            this.speechSynthesizer.quickSpeak(text);
         } else {
             this.fallbackSpeak(text);
         }
@@ -281,8 +334,7 @@ getDistance(bbox) {
             speechSynthesis.speak(utterance);
         }
     }
-
-    async stopNavigation() {
+async stopNavigation() {
         this.isRunning = false;
         
         // Останавливаем обнаружение
