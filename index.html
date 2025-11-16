@@ -41,7 +41,6 @@
             justify-content: center;
             border: 4px solid #00ff00;
             margin: 10px;
-            position: relative;
         }
         
         #webcam {
@@ -91,23 +90,6 @@
             font-weight: bold;
             display: none;
         }
-
-        .speaking-indicator {
-            background: #0066ff;
-            color: #ffffff;
-            padding: 10px;
-            text-align: center;
-            font-size: 16px;
-            display: none;
-        }
-
-        .debug {
-            background: #333333;
-            color: #00ff00;
-            padding: 10px;
-            font-size: 12px;
-            display: none;
-        }
     </style>
 </head>
 <body>
@@ -127,136 +109,8 @@
     
     <div class="warning" id="warning"></div>
 
-    <div class="speaking-indicator" id="speakingIndicator">
-        🗣️ Озвучиваю окружение...
-    </div>
-
-    <div class="debug" id="debug"></div>
-
-    <audio id="audioPlayer" style="display: none;"></audio>
-
-    <!-- Загрузка TensorFlow через официальный CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
-    
-    <script>
-        // ==================== СИСТЕМА ОЗВУЧКИ ====================
-        class SpeechSynthesizer {
-            constructor() {
-                this.isSpeaking = false;
-                this.audioContext = null;
-                this.audioPlayer = document.getElementById('audioPlayer');
-                this.speakingIndicator = document.getElementById('speakingIndicator');
-            }
-
-
-getSpeechKitConfig() {
-                return {
-                    apiUrl: 'https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize',
-                    folderId: 'b1gj8glojqbh843o2iq5',
-                    iamToken: 'ajenblfsa0oup3hjtv7i'
-                };
-            }
-
-            getVoiceSettings() {
-                return {
-                    voice: 'alena',
-                    emotion: 'good',
-                    speed: '0.9'
-                };
-            }
-
-            async speakText(text) {
-                if (this.isSpeaking) return;
-                
-                this.isSpeaking = true;
-                this.showSpeakingIndicator(true);
-
-                try {
-                    // Пробуем Yandex SpeechKit
-                    await this.synthesizeWithYandex(text);
-                } catch (error) {
-                    console.warn('Yandex SpeechKit недоступен:', error);
-                    // Фолбэк на стандартный синтез
-                    this.fallbackSpeak(text);
-                } finally {
-                    this.isSpeaking = false;
-                    this.showSpeakingIndicator(false);
-                }
-            }
-
-            async synthesizeWithYandex(text) {
-                const config = this.getSpeechKitConfig();
-                const voiceSettings = this.getVoiceSettings();
-
-                // Проверяем наличие токенов
-                if (config.folderId === 'YOUR_FOLDER_ID' || config.iamToken === 'YOUR_IAM_TOKEN') {
-                    throw new Error('Настройте Yandex SpeechKit токены');
-                }
-
-                const response = await fetch(config.apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': Bearer ${config.iamToken},
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    },
-                    body: new URLSearchParams({
-                        'text': text,
-                        'voice': voiceSettings.voice,
-                        'emotion': voiceSettings.emotion,
-                        'speed': voiceSettings.speed,
-                        'folderId': config.folderId,
-                        'format': 'oggopus'
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(SpeechKit error: ${response.status});
-                }
-
-                const audioBlob = await response.blob();
-                const audioUrl = URL.createObjectURL(audioBlob);
-                
-                this.audioPlayer.src = audioUrl;
-                await this.audioPlayer.play();
-                
-                await new Promise((resolve) => {
-                    this.audioPlayer.onended = resolve;
-                });
-            }
-
-            fallbackSpeak(text) {
-                if ('speechSynthesis' in window) {
-                    speechSynthesis.cancel();
-                    const utterance = new SpeechSynthesisUtterance(text);
-                    utterance.lang = 'ru-RU';
-                    utterance.rate = 0.9;
-                    utterance.pitch = 0.8;
-                    speechSynthesis.speak(utterance);
-                }
-            }
-
-            showSpeakingIndicator(show) {
-                this.speakingIndicator.style.display = show ? 'block' : 'none';
-            }
-        }
-
-        // Инициализация системы озвучки
-        let speechSynthesizer;
-        
-        // Инициализация Telegram Web App
-        if (window.Telegram && Telegram.WebApp) {
-            Telegram.WebApp.ready();
-            Telegram.WebApp.expand();
-        }
-        
-        // Создаем синтезатор
-        speechSynthesizer = new SpeechSynthesizer();
-        window.speechSynthesizer = speechSynthesizer;
-        
-        console.log("✅ Система озвучки инициализирована");
-    </script>
-
     <script src="app.js"></script>
 </body>
 </html>
