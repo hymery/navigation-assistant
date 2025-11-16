@@ -9,6 +9,7 @@ class NavigationAssistant {
         this.model = null;
         this.lastVoiceTime = 0;
         this.audioContext = null;
+        this.detectionInterval = null;
         
         this.init();
     }
@@ -58,7 +59,11 @@ class NavigationAssistant {
             this.updateStatus('АКТИВАЦИЯ КАМЕРЫ...');
             
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment' }
+                video: { 
+                    facingMode: 'environment',
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                }
             });
             
             this.video.srcObject = stream;
@@ -89,17 +94,21 @@ class NavigationAssistant {
     async startDetection() {
         if (!this.isRunning) return;
         
-        try {
-            const predictions = await this.model.detect(this.video);
-            const filtered = this.filterObjects(predictions);
-            this.processObjects(filtered);
-        } catch (error) {
-            console.error('Ошибка обнаружения:', error);
-        }
-
-        if (this.isRunning) {
-            setTimeout(() => this.startDetection(), 2000);
-        }
+        // Запускаем анализ 2 раза в секунду (каждые 500ms)
+        this.detectionInterval = setInterval(async () => {
+            if (!this.isRunning) {
+                clearInterval(this.detectionInterval);
+                return;
+            }
+            
+            try {
+                const predictions = await this.model.detect(this.video);
+                const filtered = this.filterObjects(predictions);
+                this.processObjects(filtered);
+            } catch (error) {
+                console.error('Ошибка обнаружения:', error);
+            }
+        }, 500); // 2 раза в секунду
     }
 
     filterObjects(predictions) {
@@ -110,8 +119,9 @@ class NavigationAssistant {
             'traffic light', 'stop sign', 'bench'
         ];
         
+        // Повышаем точность - берем только уверенные предсказания
         return predictions
-            .filter(pred => pred.score > 0.5 && targetClasses.includes(pred.class))
+            .filter(pred => pred.score > 0.7 && targetClasses.includes(pred.class))
             .sort((a, b) => b.score - a.score);
     }
 
@@ -124,29 +134,30 @@ class NavigationAssistant {
         const mainObject = objects[0];
         const now = Date.now();
         
-        if (now - this.lastVoiceTime < 4000) return;
+        if (now - this.lastVoiceTime < 2000) return; // Чаще сообщаем (каждые 2 секунды)
         
         const direction = this.getDirection(mainObject.bbox);
         const distance = this.getDistance(mainObject.bbox);
         const name = this.getRussianName(mainObject.class);
+        const confidence = Math.round(mainObject.score * 100);
         const dangerous = this.isDangerous(mainObject.class, distance);
         
         if (dangerous) {
-            this.warning.textContent = `⚠️ ${name} ${direction} ${distance}М`;
+            this.warning.textContent = `⚠️ ${name} ${direction} ${distance} (${confidence}%)`;
             this.warning.style.display = 'block';
             this.speak(`Внимание! ${name} ${direction} в ${distance} метрах`);
-            this.updateStatus(`⚠️ ${name} ${direction}`);
+            this.updateStatus(`⚠️ ${name} ${direction} ${distance}`);
         } else {
             this.warning.style.display = 'none';
             this.speak(`${name} ${direction} в ${distance} метрах`);
-            this.updateStatus(`${name} ${direction} ${distance}М`);
+            this.updateStatus(`${name} ${direction} ${distance} (${confidence}%)`);
         }
         
         this.lastVoiceTime = now;
     }
 
     getDirection(bbox) {
-        const [x, width] = bbox;
+        const [x, , width] = bbox;
         const centerX = x + width / 2;
         
         if (!this.video.videoWidth) return 'впереди';
@@ -161,15 +172,18 @@ class NavigationAssistant {
         const [,, width, height] = bbox;
         const size = width * height;
         
-        if (!this.video.videoWidth || !this.video.videoHeight) return '5-7';
+        if (!this.video.videoWidth || !this.video.videoHeight) return '7-8';
         
         const maxSize = this.video.videoWidth * this.video.videoHeight;
         const percent = size / maxSize;
         
-        if (percent > 0.3) return '1-2';
-        if (percent > 0.15) return '3-4';
-        if (percent > 0.05) return '5-7';
-        return '8-10';
+        // Новая система дальности: 1-2, 3-4, 5-6, 7-8, 9-10, 11-12 метров
+        if (percent > 0.4) return '1-2';
+        if (percent > 0.25) return '3-4';
+        if (percent > 0.15) return '5-6';
+        if (percent > 0.08) return '7-8';
+        if (percent > 0.04) return '9-10';
+        return '11-12';
     }
 
     getRussianName(englishName) {
@@ -188,7 +202,7 @@ class NavigationAssistant {
 
     isDangerous(className, distance) {
         const dangerous = ['car', 'truck', 'bus', 'motorcycle', 'train'];
-        const close = distance.includes('1-2') || distance.includes('3-4');
+        const close = distance.includes('1-2') || distance.includes('3-4') || distance.includes('5-6');
         return dangerous.includes(className) && close;
     }
 
@@ -270,6 +284,11 @@ class NavigationAssistant {
 
     async stopNavigation() {
         this.isRunning = false;
+        
+        if (this.detectionInterval) {
+            clearInterval(this.detectionInterval);
+            this.detectionInterval = null;
+        }
         
         if ('speechSynthesis' in window) {
             speechSynthesis.cancel();
