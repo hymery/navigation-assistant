@@ -12,25 +12,39 @@
             box-sizing: border-box; 
         }
         body { 
-            font-family: Arial, sans-serif; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
             background: #000000; 
             color: #ffffff; 
             height: 100vh;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
         
         .header {
             background: #000000;
-            padding: 20px;
+            padding: 15px 10px;
             text-align: center;
             border-bottom: 3px solid #00ff00;
+            position: relative;
         }
         
         h1 {
             color: #00ff00;
-            font-size: 28px;
+            font-size: 22px;
             font-weight: bold;
+        }
+        
+        .settings-btn {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #00ff00;
+            font-size: 24px;
+            cursor: pointer;
         }
         
         .video-container {
@@ -39,10 +53,10 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            border: 4px solid #00ff00;
-            margin: 10px;
+            border: 3px solid #00ff00;
+            margin: 8px;
             position: relative;
-            min-height: 300px;
+            min-height: 250px;
         }
         
         #webcam {
@@ -55,28 +69,30 @@
             position: absolute;
             top: 10px;
             left: 10px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            border-radius: 5px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 8px 12px;
+            border-radius: 8px;
             font-size: 12px;
+            border: 1px solid #00ff00;
         }
         
         .controls {
-            padding: 20px;
+            padding: 15px;
             background: #000000;
         }
         
         .main-btn {
             width: 100%;
-            padding: 25px;
+            padding: 20px;
             background: #00ff00;
             color: #000000;
             border: none;
-            border-radius: 0;
-            font-size: 24px;
+            border-radius: 12px;
+            font-size: 20px;
             font-weight: bold;
             cursor: pointer;
             transition: all 0.3s;
+            margin-bottom: 10px;
         }
         
         .main-btn:hover {
@@ -84,37 +100,40 @@
         }
         
         .main-btn:disabled {
-            background: #666666;
-            color: #cccccc;
+            background: #444444;
+            color: #888888;
             cursor: not-allowed;
         }
         
         .main-btn:active {
-            transform: scale(0.98);
+            transform: scale(0.95);
         }
         
         .status {
             background: #00ff00;
             color: #000000;
-            padding: 15px;
+            padding: 12px;
             text-align: center;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: bold;
-            min-height: 60px;
+            min-height: 50px;
             display: flex;
             align-items: center;
             justify-content: center;
+            border-radius: 8px;
         }
         
         .warning {
             background: #ff0000;
             color: #ffffff;
-            padding: 20px;
+            padding: 15px;
             text-align: center;
-            font-size: 20px;
+            font-size: 18px;
             font-weight: bold;
             display: none;
             animation: blink 1s infinite;
+            border-radius: 8px;
+            margin: 8px;
         }
         
         @keyframes blink {
@@ -128,24 +147,72 @@
             color: #00ff00;
             padding: 10px;
             text-align: center;
-            font-size: 14px;
+            font-size: 13px;
             display: none;
+            border-radius: 8px;
+            margin: 8px;
         }
         
-        .debug {
-            background: #111111;
-            color: #cccccc;
-            padding: 10px;
-            font-size: 12px;
+        .settings-panel {
             display: none;
-            max-height: 100px;
-            overflow-y: auto;
+            background: #111111;
+            padding: 15px;
+            border: 2px solid #00ff00;
+            border-radius: 12px;
+            margin: 8px;
+        }
+        
+        .setting-group {
+            margin-bottom: 15px;
+        }
+        
+        .setting-label {
+            color: #00ff00;
+            margin-bottom: 5px;
+            display: block;
+            font-size: 14px;
+        }
+        
+        .setting-range {
+            width: 100%;
+            margin: 5px 0;
+        }
+        
+        .range-value {
+            color: #ffffff;
+            font-size: 12px;
+            text-align: center;
+        }
+        
+        .test-btn {
+            background: #0066ff;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 5px;
+        }
+        
+        @media (max-width: 480px) {
+            h1 { font-size: 20px; }
+            .main-btn { padding: 18px; font-size: 18px; }
+            .status { font-size: 15px; padding: 10px; }
+            .video-overlay { font-size: 11px; padding: 6px 10px; }
+        }
+        
+        @media (max-width: 360px) {
+            h1 { font-size: 18px; }
+            .main-btn { padding: 15px; font-size: 16px; }
+            .status { font-size: 14px; }
         }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>🧭 НАВИГАЦИОННЫЙ ПОМОЩНИК</h1>
+        <button class="settings-btn" id="settingsBtn">⚙️</button>
     </div>
     
     <div class="video-container">
@@ -154,18 +221,35 @@
     </div>
     
     <div class="audio-info" id="audioInfo">
-        🔊 Для работы звука: 1) Разрешите автовоспроизведение 2) Увеличьте громкость медиа 3) Отключите беззвучный режим
+        🔊 Для звука: 1) Нажмите кнопку 2) Увеличьте громкость 3) Отключите беззвучный режим
+    </div>
+    
+    <div class="settings-panel" id="settingsPanel">
+        <div class="setting-group">
+            <label class="setting-label">Скорость речи: <span id="rateValue">0.9</span></label>
+            <input type="range" class="setting-range" id="ttsRate" min="0.5" max="1.5" step="0.1" value="0.9">
+        </div>
+        
+        <div class="setting-group">
+            <label class="setting-label">Тон голоса: <span id="pitchValue">1.0</span></label>
+            <input type="range" class="setting-range" id="ttsPitch" min="0.5" max="2.0" step="0.1" value="1.0">
+        </div>
+        
+        <div class="setting-group">
+            <label class="setting-label">Громкость: <span id="volumeValue">1.0</span></label>
+            <input type="range" class="setting-range" id="ttsVolume" min="0.1" max="1.0" step="0.1" value="1.0">
+        </div>
+        
+        <button class="test-btn" id="testTTS">Тестировать голос</button>
+        <button class="test-btn" id="testAudio">Тестировать звуки</button>
     </div>
     
     <div class="controls">
         <button class="main-btn" id="mainBtn" disabled>ЗАГРУЗКА МОДЕЛИ...</button>
+        <div class="status" id="status">Загрузка нейросети...</div>
     </div>
     
-    <div class="status" id="status">Загрузка нейросети...</div>
-    
     <div class="warning" id="warning"></div>
-    
-    <div class="debug" id="debug"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
