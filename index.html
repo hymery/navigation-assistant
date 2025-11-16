@@ -91,7 +91,6 @@
             display: none;
         }
 
-        /* Стили для индикатора речи */
         .speaking-indicator {
             background: #0066ff;
             color: #ffffff;
@@ -119,12 +118,10 @@
     
     <div class="warning" id="warning"></div>
 
-    <!-- Индикатор речи -->
     <div class="speaking-indicator" id="speakingIndicator">
         🗣️ Озвучиваю окружение...
     </div>
 
-    <!-- Аудио элемент для воспроизведения -->
     <audio id="audioPlayer" style="display: none;"></audio>
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
@@ -140,28 +137,24 @@
                 this.speakingIndicator = document.getElementById('speakingIndicator');
             }
 
-Мурта, [16.11.2025 8:23]
-// Конфигурация Yandex SpeechKit
             getSpeechKitConfig() {
                 return {
                     apiUrl: 'https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize',
-                    folderId: 'b1gj8glojqbh843o2iq5', // ЗАМЕНИ НА СВОЙ
-                    iamToken: 'ajenblfsa0oup3hjtv7i'  // ЗАМЕНИ НА СВОЙ
+                    folderId: 'YOUR_FOLDER_ID',
+                    iamToken: 'YOUR_IAM_TOKEN'
                 };
             }
 
-            // Настройки голоса - мягкий женский
-            getVoiceSettings() {
+getVoiceSettings() {
                 return {
-                    voice: 'alena',      // Мягкий женский голос
-                    emotion: 'good',     // Доброжелательная интонация
-                    speed: '0.9',        // Немного замедленно
+                    voice: 'alena',
+                    emotion: 'good',
+                    speed: '0.9',
                     format: 'lpcm',
                     sampleRate: 48000
                 };
             }
 
-            // Преобразование расстояния в текст
             distanceToText(distance) {
                 if (distance < 1) return "очень близко";
                 if (distance < 2) return "близко";
@@ -170,33 +163,29 @@
                 return "далеко";
             }
 
-            // Генерация речевого сообщения на основе обнаруженных объектов
             generateDetectionSpeech(detections) {
                 if (!detections || detections.length === 0) {
                     return "Объекты не обнаружены. Продолжайте движение осторожно.";
                 }
 
-                // Сортируем по расстоянию (предполагаем, что размер связан с расстоянием)
                 const sortedDetections = [...detections].sort((a, b) => {
-                    // Больший размер = ближе объект
                     const areaA = a.bbox[2] * a.bbox[3];
                     const areaB = b.bbox[2] * b.bbox[3];
                     return areaB - areaA;
                 });
 
                 let speechText = "";
-                const nearestObjects = sortedDetections.slice(0, 3); // Топ-3 ближайших
+                const nearestObjects = sortedDetections.slice(0, 3);
 
-                // Определяем "расстояние" на основе размера bounding box
                 const getRelativeDistance = (bbox) => {
                     const area = bbox[2] * bbox[3];
                     const screenArea = window.innerWidth * window.innerHeight;
                     const ratio = area / screenArea;
                     
-                    if (ratio > 0.3) return 0.5;   // Очень близко
-                    if (ratio > 0.15) return 1.0;  // Близко
-                    if (ratio > 0.05) return 2.5;  // Недалеко
-                    return 5.0;                    // Далеко
+                    if (ratio > 0.3) return 0.5;
+                    if (ratio > 0.15) return 1.0;
+                    if (ratio > 0.05) return 2.5;
+                    return 5.0;
                 };
 
                 if (nearestObjects.length > 0) {
@@ -206,14 +195,12 @@
                     speechText += Впереди ${nearest.class}. ;
                     speechText += Находится ${this.distanceToText(distance)}. ;
 
-                    // Добавляем предупреждения для опасных объектов
                     const dangerousObjects = ['person', 'car', 'bicycle', 'motorcycle', 'fire hydrant', 'stop sign'];
                     if (dangerousObjects.includes(nearest.class) && distance < 2) {
                         speechText += "Внимание! Будьте осторожны. ";
                     }
                 }
 
-                // Информация о других объектах
                 if (nearestObjects.length > 1) {
                     const otherObjects = nearestObjects.slice(1, 3);
                     if (otherObjects.length > 0) {
@@ -227,8 +214,6 @@
                     }
                 }
 
-Мурта, [16.11.2025 8:23]
-// Общая информация о количестве объектов
                 if (detections.length > 3) {
                     speechText += Всего обнаружено ${detections.length} объектов. ;
                 }
@@ -237,19 +222,15 @@
                 return speechText;
             }
 
-            // Основная функция озвучки
             async speakDetectionResults(detections) {
-                if (this.isSpeaking) return; // Не прерываем текущую речь
+                if (this.isSpeaking) return;
 
                 this.isSpeaking = true;
                 this.showSpeakingIndicator(true);
 
                 try {
-                    // Генерируем текст для озвучки
                     const speechText = this.generateDetectionSpeech(detections);
                     console.log("Озвучиваем:", speechText);
-
-                    // Синтезируем и воспроизводим речь
                     await this.synthesizeAndPlay(speechText);
                     
                 } catch (error) {
@@ -260,12 +241,11 @@
                 }
             }
 
-            // Синтез и воспроизведение через Yandex SpeechKit
             async synthesizeAndPlay(text) {
                 const config = this.getSpeechKitConfig();
                 const voiceSettings = this.getVoiceSettings();
 
-                const response = await fetch(config.apiUrl, {
+const response = await fetch(config.apiUrl, {
                     method: 'POST',
                     headers: {
                         'Authorization': Bearer ${config.iamToken},
@@ -292,14 +272,12 @@
                 
                 this.audioPlayer.src = audioUrl;
                 
-                // Воспроизводим и ждем окончания
                 await this.audioPlayer.play();
                 await new Promise((resolve) => {
                     this.audioPlayer.onended = resolve;
                 });
             }
 
-            // Конвертация LPCM в WAV
             convertToWav(audioData) {
                 const buffer = new ArrayBuffer(44 + audioData.byteLength);
                 const view = new DataView(buffer);
@@ -325,8 +303,7 @@
                 return buffer;
             }
 
-Мурта, [16.11.2025 8:23]
-writeString(view, offset, string) {
+            writeString(view, offset, string) {
                 for (let i = 0; i < string.length; i++) {
                     view.setUint8(offset + i, string.charCodeAt(i));
                 }
@@ -336,46 +313,24 @@ writeString(view, offset, string) {
                 this.speakingIndicator.style.display = show ? 'block' : 'none';
             }
 
-            // Экстренное сообщение
             async speakEmergency(message) {
                 if (this.isSpeaking) {
-                    this.audioPlayer.pause(); // Прерываем текущую речь для экстренного сообщения
+                    this.audioPlayer.pause();
                     this.isSpeaking = false;
                 }
                 await this.synthesizeAndPlay("Внимание! " + message);
             }
         }
 
-        // ==================== ИНИЦИАЛИЗАЦИЯ СИСТЕМЫ ОЗВУЧКИ ====================
+        // Инициализация системы озвучки
         let speechSynthesizer;
-
-        // Инициализируем когда Telegram Web App готов
         Telegram.WebApp.ready();
         Telegram.WebApp.expand();
-
-        // Создаем глобальный экземпляр синтезатора
         speechSynthesizer = new SpeechSynthesizer();
-
-        // Делаем синтезатор глобально доступным для использования в app.js
         window.speechSynthesizer = speechSynthesizer;
-
         console.log("✅ Система озвучки инициализирована");
-
-        // Тестовая функция для проверки озвучки (можно удалить)
-        function testSpeech() {
-            const testDetections = [
-                { class: 'person', bbox: [100, 100, 200, 300] },
-                { class: 'chair', bbox: [300, 150, 100, 150] },
-                { class: 'car', bbox: [50, 200, 150, 100] }
-            ];
-            speechSynthesizer.speakDetectionResults(testDetections);
-        }
-
-        // Раскомментируй для теста:
-        // setTimeout(testSpeech, 3000);
     </script>
 
     <script src="app.js"></script>
 </body>
 </html>
-
