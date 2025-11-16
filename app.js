@@ -36,10 +36,6 @@ class NavigationAssistant {
     async loadModel() {
         try {
             this.updateStatus('ЗАГРУЗКА НЕЙРОСЕТИ...');
-            
-            // Инициализация TensorFlow.js
-            await tf.ready();
-            
             this.model = await cocoSsd.load();
             this.mainBtn.disabled = false;
             this.mainBtn.textContent = '🚀 АКТИВИРОВАТЬ СКАНИРОВАНИЕ';
@@ -64,11 +60,7 @@ class NavigationAssistant {
             this.updateStatus('АКТИВАЦИЯ КАМЕРЫ...');
             
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { 
-                    facingMode: 'environment',
-                    width: { ideal: 640 },
-                    height: { ideal: 480 }
-                }
+                video: { facingMode: 'environment' }
             });
             
             this.video.srcObject = stream;
@@ -143,18 +135,15 @@ class NavigationAssistant {
         const name = this.getRussianName(mainObject.class);
         const dangerous = this.isDangerous(mainObject.class, distance);
         
-        // Для отображения - с дефисами
         const displayDistance = distance.replace(' ', '-');
         
         if (dangerous) {
             this.warning.textContent = `⚠️ ${name} ${direction} ${displayDistance}`;
             this.warning.style.display = 'block';
-            // Для озвучки - без дефисов
             await this.speak(`Внимание ${name} ${direction} ${distance} метров`);
             this.updateStatus(`⚠️ ${name} ${direction} ${displayDistance}`);
         } else {
             this.warning.style.display = 'none';
-            // Для озвучки - без дефисов
             await this.speak(`${name} ${direction} ${distance} метров`);
             this.updateStatus(`${name} ${direction} ${displayDistance}`);
         }
@@ -183,7 +172,6 @@ class NavigationAssistant {
         const maxSize = this.video.videoWidth * this.video.videoHeight;
         const percent = size / maxSize;
         
-        // Возвращаем с пробелом для озвучки (без дефиса)
         if (percent > 0.3) return '1 2';
         if (percent > 0.15) return '3 4';
         if (percent > 0.05) return '5 6';
