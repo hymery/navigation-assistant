@@ -8,6 +8,7 @@ class NavigationAssistant {
         this.isRunning = false;
         this.model = null;
         this.lastVoiceTime = 0;
+        this.speechSynthesizer = null;
         
         this.init();
     }
@@ -20,8 +21,35 @@ class NavigationAssistant {
             Telegram.WebApp.expand();
         }
         
+        // Инициализация системы озвучки
+        await this.initSpeechSynthesizer();
+        
         this.mainBtn.addEventListener('click', () => this.toggleNavigation());
         await this.loadModel();
+    }
+
+    async initSpeechSynthesizer() {
+        try {
+            // Используем глобальный синтезатор из HTML или создаем новый
+            if (window.speechSynthesizer) {
+                this.speechSynthesizer = window.speechSynthesizer;
+                console.log('✅ Система озвучки подключена');
+            } else {
+                console.warn('⚠️ Глобальная система озвучки не найдена, используем встроенную');
+                this.speechSynthesizer = {
+                    speakDetectionResults: (detections) => {
+                        // Фолбэк на стандартный синтез речи
+                        const text = this.generateSpeechFromDetections(detections);
+                        this.speak(text);
+                    },
+                    speakEmergency: (message) => {
+                        this.speak("Внимание! " + message);
+                    }
+                };
+            }
+        } catch (error) {
+            console.error('Ошибка инициализации синтезатора:', error);
+        }
     }
 
     async loadModel() {
@@ -31,6 +59,12 @@ class NavigationAssistant {
             this.mainBtn.disabled = false;
             this.mainBtn.textContent = '🚀 АКТИВИРОВАТЬ СКАНИРОВАНИЕ';
             this.updateStatus('✅ СИСТЕМА ГОТОВА');
+            
+            // Тестовое сообщение о готовности
+            setTimeout(() => {
+                this.speak('Система навигации готова к работе');
+            }, 1000);
+            
         } catch (error) {
             console.error('Ошибка загрузки модели:', error);
             this.updateStatus('❌ ОШИБКА ЗАГРУЗКИ');
@@ -67,17 +101,19 @@ class NavigationAssistant {
             this.isRunning = true;
             this.mainBtn.textContent = '⏹ ОСТАНОВИТЬ СКАНИРОВАНИЕ';
             this.updateStatus('🔍 СКАНИРОВАНИЕ АКТИВНО');
-            this.speak('Сканирование активировано');
+            this.speak('Сканирование окружения активировано');
             
             this.startDetection();
             
         } catch (error) {
+            console.error('Ошибка камеры:', error);
             this.updateStatus('❌ ОШИБКА КАМЕРЫ');
-            this.speak('Ошибка камеры');
+            this.speak('Ошибка доступа к камере');
         }
     }
 
-    async startDetection() {
+Мурта, [16.11.2025 8:27]
+async startDetection() {
         if (!this.isRunning) return;
         
         try {
@@ -98,7 +134,8 @@ class NavigationAssistant {
             'person', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', // Люди и животные
             'car', 'truck', 'bus', 'motorcycle', 'bicycle', 'train', // Транспорт
             'chair', 'couch', 'potted plant', 'bed', // Препятствия
-            'traffic light', 'stop sign', 'bench' // Инфраструктура
+            'traffic light', 'stop sign', 'bench', // Инфраструктура
+            'backpack', 'umbrella', 'handbag', 'tie', 'suitcase' // Личные вещи
         ];
         
         return predictions
@@ -109,12 +146,18 @@ class NavigationAssistant {
     processObjects(objects) {
         if (objects.length === 0) {
             this.updateStatus('ОБЪЕКТЫ НЕ ОБНАРУЖЕНЫ');
+            // Озвучиваем только если долго нет объектов
+            if (Date.now() - this.lastVoiceTime > 8000) {
+                this.speak('Объекты не обнаружены, продолжайте движение');
+                this.lastVoiceTime = Date.now();
+            }
             return;
         }
         
         const mainObject = objects[0];
         const now = Date.now();
         
+        // Ограничиваем частоту озвучки
         if (now - this.lastVoiceTime < 4000) return;
         
         const direction = this.getDirection(mainObject.bbox);
@@ -122,18 +165,43 @@ class NavigationAssistant {
         const name = this.getRussianName(mainObject.class);
         const dangerous = this.isDangerous(mainObject.class, distance);
         
-        if (dangerous) {
-            this.warning.textContent = `⚠️ ${name} ${direction} ${distance}М`;
-            this.warning.style.display = 'block';
-            this.speak(`ВНИМАНИЕ! ${name} ${direction} ${distance} МЕТРОВ`);
-            this.updateStatus(`⚠️ ${name} ${direction}`);
+        // Используем Yandex SpeechKit для озвучки
+        if (this.speechSynthesizer && this.speechSynthesizer.speakDetectionResults) {
+            this.speechSynthesizer.speakDetectionResults(objects);
         } else {
-            this.warning.style.display = 'none';
-            this.speak(`${name} ${direction} ${distance} МЕТРОВ`);
-            this.updateStatus(`${name} ${direction} ${distance}М`);
+            // Фолбэк на старую систему
+            if (dangerous) {
+                this.warning.textContent = ⚠️ ${name} ${direction} ${distance}М;
+                this.warning.style.display = 'block';
+                this.speak(ВНИМАНИЕ! ${name} ${direction} ${distance} МЕТРОВ);
+                this.updateStatus(⚠️ ${name} ${direction});
+            } else {
+                this.warning.style.display = 'none';
+                this.speak(${name} ${direction} ${distance} МЕТРОВ);
+                this.updateStatus(${name} ${direction} ${distance}М);
+            }
         }
         
         this.lastVoiceTime = now;
+    }
+
+    // Генерация речи для фолбэка
+    generateSpeechFromDetections(detections) {
+        if (!detections || detections.length === 0) {
+            return "Объекты не обнаружены";
+        }
+
+        const mainObject = detections[0];
+        const direction = this.getDirection(mainObject.bbox);
+        const distance = this.getDistance(mainObject.bbox);
+        const name = this.getRussianName(mainObject.class);
+        const dangerous = this.isDangerous(mainObject.class, distance);
+
+        if (dangerous) {
+            return ВНИМАНИЕ! ${name} ${direction} ${distance} МЕТРОВ;
+        } else {
+            return ${name} ${direction} ${distance} МЕТРОВ;
+        }
     }
 
     getDirection(bbox) {
@@ -148,7 +216,8 @@ class NavigationAssistant {
         return 'впереди';
     }
 
-    getDistance(bbox) {
+Мурта, [16.11.2025 8:27]
+getDistance(bbox) {
         const [,, width, height] = bbox;
         const size = width * height;
         
@@ -172,7 +241,9 @@ class NavigationAssistant {
             'motorcycle': 'мотоцикл', 'bicycle': 'велосипед', 'train': 'поезд',
             'chair': 'стул', 'couch': 'диван', 'potted plant': 'растение',
             'bed': 'кровать', 'traffic light': 'светофор',
-            'stop sign': 'знак остановки', 'bench': 'скамейка'
+            'stop sign': 'знак остановки', 'bench': 'скамейка',
+            'backpack': 'рюкзак', 'umbrella': 'зонт', 'handbag': 'сумка',
+            'tie': 'галстук', 'suitcase': 'чемодан'
         };
         return names[englishName] || englishName;
     }
@@ -184,18 +255,35 @@ class NavigationAssistant {
     }
 
     speak(text) {
+        // Используем Yandex SpeechKit если доступен, иначе стандартный синтез
+        if (this.speechSynthesizer && this.speechSynthesizer.synthesizeAndPlay) {
+            this.speechSynthesizer.synthesizeAndPlay(text).catch(error => {
+                console.warn('Yandex SpeechKit недоступен, используем стандартный синтез');
+                this.fallbackSpeak(text);
+            });
+        } else {
+            this.fallbackSpeak(text);
+        }
+    }
+
+    fallbackSpeak(text) {
         if ('speechSynthesis' in window) {
             speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'ru-RU';
             utterance.rate = 0.9;
+            utterance.pitch = 1.0;
             speechSynthesis.speak(utterance);
         }
     }
 
     async stopNavigation() {
         this.isRunning = false;
-        speechSynthesis.cancel();
+        
+        // Останавливаем все системы речи
+        if ('speechSynthesis' in window) {
+            speechSynthesis.cancel();
+        }
         
         if (this.video.srcObject) {
             this.video.srcObject.getTracks().forEach(track => track.stop());
@@ -212,9 +300,31 @@ class NavigationAssistant {
     updateStatus(message) {
         this.status.textContent = message;
     }
+
+    // Метод для экстренных сообщений
+    emergencyAlert(message) {
+        if (this.speechSynthesizer && this.speechSynthesizer.speakEmergency) {
+            this.speechSynthesizer.speakEmergency(message);
+        } else {
+            this.speak("ВНИМАНИЕ! " + message);
+        }
+        
+        this.warning.textContent = 🚨 ${message};
+        this.warning.style.display = 'block';
+        this.updateStatus(🚨 ${message});
+    }
 }
 
-// Запуск
+// Запуск приложения
 window.addEventListener('load', () => {
+    console.log('🎯 Запуск навигационного помощника...');
     new NavigationAssistant();
 });
+
+// Глобальные функции для отладки
+window.navigationAssistant = null;
+
+// Автоматическое создание экземпляра с задержкой для инициализации Telegram Web App
+setTimeout(() => {
+    window.navigationAssistant = new NavigationAssistant();
+}, 100);
