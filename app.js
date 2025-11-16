@@ -1,15 +1,17 @@
-hymery, [16.11.2025 10:22]
 class NavigationAssistant {
     constructor() {
         this.video = document.getElementById('webcam');
         this.mainBtn = document.getElementById('mainBtn');
         this.status = document.getElementById('status');
         this.warning = document.getElementById('warning');
+        this.audioInfo = document.getElementById('audioInfo');
+        this.videoOverlay = document.getElementById('videoOverlay');
         
         this.isRunning = false;
         this.model = null;
         this.lastVoiceTime = 0;
         this.audioContext = null;
+        this.audioEnabled = false;
         
         this.init();
     }
@@ -22,29 +24,78 @@ class NavigationAssistant {
         }
         
         this.mainBtn.addEventListener('click', () => this.toggleNavigation());
-        this.setupAudio();
+        
+        // Активация аудио при первом клике
+        document.addEventListener('click', () => this.activateAudio(), { once: true });
+        
         await this.loadModel();
+        this.audioInfo.style.display = 'block';
     }
 
-    setupAudio() {
-        // Разблокируем аудио при первом клике
-        document.addEventListener('click', () => {
-            if (!this.audioContext) {
-                this.audioContext = new (window.AudioContext  window.webkitAudioContext)();
+    async activateAudio() {
+        console.log('🎵 Активация аудиосистемы...');
+        
+        // Создаем AudioContext
+        try {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            console.log('✅ AudioContext создан');
+        } catch (error) {
+            console.log('❌ AudioContext не доступен:', error);
+        }
+        
+        // Тестируем SpeechSynthesis
+        await this.testSpeechSynthesis();
+        
+        this.audioEnabled = true;
+        this.audioInfo.style.display = 'none';
+        this.updateStatus('✅ СИСТЕМА ГОТОВА');
+    }
+
+    async testSpeechSynthesis() {
+        return new Promise((resolve) => {
+            if (!'speechSynthesis' in window) {
+                console.log('❌ SpeechSynthesis не поддерживается');
+                resolve(false);
+                return;
             }
-        }, { once: true });
+            
+            // Получаем доступные голоса
+            const voices = speechSynthesis.getVoices();
+            const russianVoices = voices.filter(voice => voice.lang.includes('ru'));
+            console.log(`🎙 Доступно русских голосов: ${russianVoices.length}`);
+            
+            // Тестовое воспроизведение
+            const testUtterance = new SpeechSynthesisUtterance(' ');
+            testUtterance.volume = 0.1;
+            
+            testUtterance.onend = () => {
+                console.log('✅ SpeechSynthesis работает');
+                resolve(true);
+            };
+            
+            testUtterance.onerror = () => {
+                console.log('❌ SpeechSynthesis ошибка');
+                resolve(false);
+            };
+            
+            speechSynthesis.speak(testUtterance);
+        });
     }
 
     async loadModel() {
         try {
             this.updateStatus('ЗАГРУЗКА НЕЙРОСЕТИ...');
+            console.log('📦 Загрузка модели COCO-SSD...');
+            
             this.model = await cocoSsd.load();
             this.mainBtn.disabled = false;
             this.mainBtn.textContent = '🚀 АКТИВИРОВАТЬ СКАНИРОВАНИЕ';
-            this.updateStatus('✅ СИСТЕМА ГОТОВА');
+            this.updateStatus('✅ МОДЕЛЬ ЗАГРУЖЕНА');
+            console.log('✅ Модель загружена успешно');
+            
         } catch (error) {
             console.error('Ошибка загрузки модели:', error);
-            this.updateStatus('❌ ОШИБКА ЗАГРУЗКИ');
+            this.updateStatus('❌ ОШИБКА ЗАГРУЗКИ AI');
             this.mainBtn.textContent = '🚀 АКТИВИРОВАТЬ (БЕЗ AI)';
             this.mainBtn.disabled = false;
         }
@@ -67,6 +118,7 @@ class NavigationAssistant {
             });
             
             this.video.srcObject = stream;
+            this.videoOverlay.textContent = 'Камера активна';
             
             await new Promise((resolve) => {
                 this.video.onloadedmetadata = () => {
@@ -76,17 +128,16 @@ class NavigationAssistant {
             });
             
             this.isRunning = true;
-            this.mainBtn.textContent = '⏹️ ОСТАНОВИТЬ СКАНИРОВАНИЕ';
+            this.mainBtn.textContent = '⏹ ОСТАНОВИТЬ СКАНИРОВАНИЕ';
             this.updateStatus('🔍 СКАНИРОВАНИЕ АКТИВНО');
             
-            // Озвучка с задержкой для телефона
-            setTimeout(() => {
-                this.speak('Сканирование активировано');
-            }, 1000);
+            // Озвучка старта
+            this.speak('Сканирование активировано');
             
             this.startDetection();
             
         } catch (error) {
+            console.error('Ошибка камеры:', error);
             this.updateStatus('❌ ОШИБКА КАМЕРЫ');
             this.speak('Ошибка камеры');
         }
@@ -124,36 +175,39 @@ class NavigationAssistant {
     processObjects(objects) {
         if (objects.length === 0) {
             this.updateStatus('ОБЪЕКТЫ НЕ ОБНАРУЖЕНЫ');
+            this.videoOverlay.textContent = 'Объекты не найдены';
             return;
         }
         
         const mainObject = objects[0];
         const now = Date.now();
-
-hymery, [16.11.2025 10:22]
-if (now - this.lastVoiceTime < 4000) return;
+        
+        // Ограничение частоты озвучки
+        if (now - this.lastVoiceTime < 4000) return;
         
         const direction = this.getDirection(mainObject.bbox);
         const distance = this.getDistance(mainObject.bbox);
         const name = this.getRussianName(mainObject.class);
         const dangerous = this.isDangerous(mainObject.class, distance);
         
+        this.videoOverlay.textContent = `${name} ${direction} ${distance}`;
+        
         if (dangerous) {
-            this.warning.textContent = `⚠️ ${name} ${direction} ${distance}М`;
+            this.warning.textContent = `⚠️ ${name} ${direction} ${distance}`;
             this.warning.style.display = 'block';
             this.speak(`Внимание! ${name} ${direction} в ${distance} метрах`);
             this.updateStatus(`⚠️ ${name} ${direction}`);
         } else {
             this.warning.style.display = 'none';
             this.speak(`${name} ${direction} в ${distance} метрах`);
-            this.updateStatus(`${name} ${direction} ${distance}М`);
+            this.updateStatus(`${name} ${direction} ${distance}`);
         }
         
         this.lastVoiceTime = now;
     }
 
     getDirection(bbox) {
-        const [x, width] = bbox;
+        const [x, , width] = bbox;
         const centerX = x + width / 2;
         
         if (!this.video.videoWidth) return 'впереди';
@@ -168,7 +222,7 @@ if (now - this.lastVoiceTime < 4000) return;
         const [,, width, height] = bbox;
         const size = width * height;
         
-        if (!this.video.videoWidth  !this.video.videoHeight) return '5-7';
+        if (!this.video.videoWidth || !this.video.videoHeight) return '5-7';
         
         const maxSize = this.video.videoWidth * this.video.videoHeight;
         const percent = size / maxSize;
@@ -190,29 +244,28 @@ if (now - this.lastVoiceTime < 4000) return;
             'bed': 'кровать', 'traffic light': 'светофор',
             'stop sign': 'знак остановки', 'bench': 'скамейка'
         };
-        return names[englishName]  englishName;
+        return names[englishName] || englishName;
     }
 
     isDangerous(className, distance) {
         const dangerous = ['car', 'truck', 'bus', 'motorcycle', 'train'];
-        const close = distance.includes('1-2')  distance.includes('3-4');
+        const close = distance.includes('1-2') || distance.includes('3-4');
         return dangerous.includes(className) && close;
     }
 
-    // 🔥 УЛУЧШЕННАЯ ОЗВУЧКА ДЛЯ ТЕЛЕФОНА
     async speak(text) {
         console.log('🔊 Озвучка:', text);
         
-        // Сначала пробуем браузерный TTS
-        const ttsSuccess = await this.speakWithBrowserTTS(text);
+        // Пробуем SpeechSynthesis
+        const ttsSuccess = await this.speakWithTTS(text);
         
         if (!ttsSuccess) {
-            // Если не сработало - звуковые сигналы
-            this.playFallbackSound(text);
+            // Если не сработало - используем Web Audio API
+            this.playAudioSignal(text);
         }
     }
 
-    async speakWithBrowserTTS(text) {
+    async speakWithTTS(text) {
         return new Promise((resolve) => {
             if (!'speechSynthesis' in window) {
                 resolve(false);
@@ -223,8 +276,8 @@ if (now - this.lastVoiceTime < 4000) return;
             
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'ru-RU';
-            utterance.rate = 0.85;
-            utterance.pitch = 1.1;
+            utterance.rate = 0.9;
+            utterance.pitch = 1.0;
             utterance.volume = 1.0;
             
             utterance.onstart = () => {
@@ -241,29 +294,31 @@ if (now - this.lastVoiceTime < 4000) return;
                 resolve(false);
             };
             
-            // Для телефонов добавляем задержку
-            setTimeout(() => {
-                speechSynthesis.speak(utterance);
-            }, 100);
+            speechSynthesis.speak(utterance);
         });
     }
 
-hymery, [16.11.2025 10:22]
-playFallbackSound(text) {
+    playAudioSignal(text) {
         if (!this.audioContext) {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            console.log('❌ AudioContext не доступен');
+            return;
         }
         
         try {
+            // Активируем AudioContext если нужно
+            if (this.audioContext.state === 'suspended') {
+                this.audioContext.resume();
+            }
+            
             const oscillator = this.audioContext.createOscillator();
             const gainNode = this.audioContext.createGain();
             
             oscillator.connect(gainNode);
             gainNode.connect(this.audioContext.destination);
             
-            // Разные сигналы для разных сообщений
+            // Разные сигналы для разных типов сообщений
             if (text.includes('Внимание')) {
-                // Прерывистый сигнал для опасности
+                // Опасность - прерывистый сигнал
                 oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime);
                 setTimeout(() => {
                     oscillator.frequency.setValueAtTime(600, this.audioContext.currentTime + 0.1);
@@ -272,7 +327,7 @@ playFallbackSound(text) {
                     oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime + 0.2);
                 }, 200);
             } else {
-                // Плавный тон для обычных сообщений
+                // Обычное сообщение - плавный тон
                 oscillator.frequency.setValueAtTime(400, this.audioContext.currentTime);
             }
             
@@ -282,7 +337,7 @@ playFallbackSound(text) {
             oscillator.start(this.audioContext.currentTime);
             oscillator.stop(this.audioContext.currentTime + 0.8);
             
-            console.log('🔊 Звуковой сигнал для:', text);
+            console.log('🔊 Воспроизведен звуковой сигнал');
             
         } catch (error) {
             console.log('❌ Ошибка звукового сигнала:', error);
@@ -303,10 +358,10 @@ playFallbackSound(text) {
             this.video.srcObject = null;
         }
         
-        // Возвращаем кнопку в исходное состояние
         this.mainBtn.textContent = '🚀 АКТИВИРОВАТЬ СКАНИРОВАНИЕ';
-        this.updateStatus('✅ СКАНИРИОВАНИЕ ОСТАНОВЛЕНО');
+        this.updateStatus('✅ СКАНИРОВАНИЕ ОСТАНОВЛЕНО');
         this.warning.style.display = 'none';
+        this.videoOverlay.textContent = 'Камера не активна';
         
         this.speak('Сканирование остановлено');
     }
@@ -316,7 +371,7 @@ playFallbackSound(text) {
     }
 }
 
-// Запуск
+// Запуск приложения
 window.addEventListener('load', () => {
     new NavigationAssistant();
 });
