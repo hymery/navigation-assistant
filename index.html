@@ -90,6 +90,16 @@
             font-weight: bold;
             display: none;
         }
+
+        /* Стили для индикатора речи */
+        .speaking-indicator {
+            background: #0066ff;
+            color: #ffffff;
+            padding: 10px;
+            text-align: center;
+            font-size: 16px;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -109,8 +119,262 @@
     
     <div class="warning" id="warning"></div>
 
+    <!-- Индикатор речи -->
+    <div class="speaking-indicator" id="speakingIndicator">
+        🗣️ Озвучиваю окружение...
+    </div>
+
+    <!-- Аудио элемент для воспроизведения -->
+    <audio id="audioPlayer" style="display: none;"></audio>
+
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
+    
+    <script>
+        // ==================== СИСТЕМА ОЗВУЧКИ ====================
+        class SpeechSynthesizer {
+            constructor() {
+                this.isSpeaking = false;
+                this.audioContext = null;
+                this.audioPlayer = document.getElementById('audioPlayer');
+                this.speakingIndicator = document.getElementById('speakingIndicator');
+            }
+
+Мурта, [16.11.2025 8:23]
+// Конфигурация Yandex SpeechKit
+            getSpeechKitConfig() {
+                return {
+                    apiUrl: 'https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize',
+                    folderId: 'YOUR_FOLDER_ID', // ЗАМЕНИ НА СВОЙ
+                    iamToken: 'YOUR_IAM_TOKEN'  // ЗАМЕНИ НА СВОЙ
+                };
+            }
+
+            // Настройки голоса - мягкий женский
+            getVoiceSettings() {
+                return {
+                    voice: 'alena',      // Мягкий женский голос
+                    emotion: 'good',     // Доброжелательная интонация
+                    speed: '0.9',        // Немного замедленно
+                    format: 'lpcm',
+                    sampleRate: 48000
+                };
+            }
+
+            // Преобразование расстояния в текст
+            distanceToText(distance) {
+                if (distance < 1) return "очень близко";
+                if (distance < 2) return "близко";
+                if (distance < 4) return "недалеко";
+                if (distance < 8) return "в нескольких метрах";
+                return "далеко";
+            }
+
+            // Генерация речевого сообщения на основе обнаруженных объектов
+            generateDetectionSpeech(detections) {
+                if (!detections || detections.length === 0) {
+                    return "Объекты не обнаружены. Продолжайте движение осторожно.";
+                }
+
+                // Сортируем по расстоянию (предполагаем, что размер связан с расстоянием)
+                const sortedDetections = [...detections].sort((a, b) => {
+                    // Больший размер = ближе объект
+                    const areaA = a.bbox[2] * a.bbox[3];
+                    const areaB = b.bbox[2] * b.bbox[3];
+                    return areaB - areaA;
+                });
+
+                let speechText = "";
+                const nearestObjects = sortedDetections.slice(0, 3); // Топ-3 ближайших
+
+                // Определяем "расстояние" на основе размера bounding box
+                const getRelativeDistance = (bbox) => {
+                    const area = bbox[2] * bbox[3];
+                    const screenArea = window.innerWidth * window.innerHeight;
+                    const ratio = area / screenArea;
+                    
+                    if (ratio > 0.3) return 0.5;   // Очень близко
+                    if (ratio > 0.15) return 1.0;  // Близко
+                    if (ratio > 0.05) return 2.5;  // Недалеко
+                    return 5.0;                    // Далеко
+                };
+
+                if (nearestObjects.length > 0) {
+                    const nearest = nearestObjects[0];
+                    const distance = getRelativeDistance(nearest.bbox);
+                    
+                    speechText += Впереди ${nearest.class}. ;
+                    speechText += Находится ${this.distanceToText(distance)}. ;
+
+                    // Добавляем предупреждения для опасных объектов
+                    const dangerousObjects = ['person', 'car', 'bicycle', 'motorcycle', 'fire hydrant', 'stop sign'];
+                    if (dangerousObjects.includes(nearest.class) && distance < 2) {
+                        speechText += "Внимание! Будьте осторожны. ";
+                    }
+                }
+
+                // Информация о других объектах
+                if (nearestObjects.length > 1) {
+                    const otherObjects = nearestObjects.slice(1, 3);
+                    if (otherObjects.length > 0) {
+                        speechText += "Также рядом: ";
+                        otherObjects.forEach((obj, index) => {
+                            const distance = getRelativeDistance(obj.bbox);
+                            speechText += ${obj.class} ${this.distanceToText(distance)};
+                            if (index < otherObjects.length - 1) speechText += ", ";
+                        });
+                        speechText += ". ";
+                    }
+                }
+
+Мурта, [16.11.2025 8:23]
+// Общая информация о количестве объектов
+                if (detections.length > 3) {
+                    speechText += Всего обнаружено ${detections.length} объектов. ;
+                }
+
+                speechText += "Продолжайте движение осторожно.";
+                return speechText;
+            }
+
+            // Основная функция озвучки
+            async speakDetectionResults(detections) {
+                if (this.isSpeaking) return; // Не прерываем текущую речь
+
+                this.isSpeaking = true;
+                this.showSpeakingIndicator(true);
+
+                try {
+                    // Генерируем текст для озвучки
+                    const speechText = this.generateDetectionSpeech(detections);
+                    console.log("Озвучиваем:", speechText);
+
+                    // Синтезируем и воспроизводим речь
+                    await this.synthesizeAndPlay(speechText);
+                    
+                } catch (error) {
+                    console.error('Speech synthesis error:', error);
+                } finally {
+                    this.isSpeaking = false;
+                    this.showSpeakingIndicator(false);
+                }
+            }
+
+            // Синтез и воспроизведение через Yandex SpeechKit
+            async synthesizeAndPlay(text) {
+                const config = this.getSpeechKitConfig();
+                const voiceSettings = this.getVoiceSettings();
+
+                const response = await fetch(config.apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': Bearer ${config.iamToken},
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: new URLSearchParams({
+                        'text': text,
+                        'voice': voiceSettings.voice,
+                        'emotion': voiceSettings.emotion,
+                        'speed': voiceSettings.speed,
+                        'folderId': config.folderId,
+                        'format': 'lpcm',
+                        'sampleRateHertz': '48000'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(SpeechKit error: ${response.status});
+                }
+
+                const audioData = await response.arrayBuffer();
+                const wavBuffer = this.convertToWav(audioData);
+                const audioUrl = URL.createObjectURL(new Blob([wavBuffer], { type: 'audio/wav' }));
+                
+                this.audioPlayer.src = audioUrl;
+                
+                // Воспроизводим и ждем окончания
+                await this.audioPlayer.play();
+                await new Promise((resolve) => {
+                    this.audioPlayer.onended = resolve;
+                });
+            }
+
+            // Конвертация LPCM в WAV
+            convertToWav(audioData) {
+                const buffer = new ArrayBuffer(44 + audioData.byteLength);
+                const view = new DataView(buffer);
+                
+                this.writeString(view, 0, 'RIFF');
+                view.setUint32(4, 36 + audioData.byteLength, true);
+                this.writeString(view, 8, 'WAVE');
+                this.writeString(view, 12, 'fmt ');
+                view.setUint32(16, 16, true);
+                view.setUint16(20, 1, true);
+                view.setUint16(22, 1, true);
+                view.setUint32(24, 48000, true);
+                view.setUint32(28, 48000 * 2, true);
+                view.setUint16(32, 2, true);
+                view.setUint16(34, 16, true);
+                this.writeString(view, 36, 'data');
+                view.setUint32(40, audioData.byteLength, true);
+                
+                const audioBytes = new Uint8Array(audioData);
+                const wavBytes = new Uint8Array(buffer);
+                wavBytes.set(audioBytes, 44);
+                
+                return buffer;
+            }
+
+Мурта, [16.11.2025 8:23]
+writeString(view, offset, string) {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            }
+
+            showSpeakingIndicator(show) {
+                this.speakingIndicator.style.display = show ? 'block' : 'none';
+            }
+
+            // Экстренное сообщение
+            async speakEmergency(message) {
+                if (this.isSpeaking) {
+                    this.audioPlayer.pause(); // Прерываем текущую речь для экстренного сообщения
+                    this.isSpeaking = false;
+                }
+                await this.synthesizeAndPlay("Внимание! " + message);
+            }
+        }
+
+        // ==================== ИНИЦИАЛИЗАЦИЯ СИСТЕМЫ ОЗВУЧКИ ====================
+        let speechSynthesizer;
+
+        // Инициализируем когда Telegram Web App готов
+        Telegram.WebApp.ready();
+        Telegram.WebApp.expand();
+
+        // Создаем глобальный экземпляр синтезатора
+        speechSynthesizer = new SpeechSynthesizer();
+
+        // Делаем синтезатор глобально доступным для использования в app.js
+        window.speechSynthesizer = speechSynthesizer;
+
+        console.log("✅ Система озвучки инициализирована");
+
+        // Тестовая функция для проверки озвучки (можно удалить)
+        function testSpeech() {
+            const testDetections = [
+                { class: 'person', bbox: [100, 100, 200, 300] },
+                { class: 'chair', bbox: [300, 150, 100, 150] },
+                { class: 'car', bbox: [50, 200, 150, 100] }
+            ];
+            speechSynthesizer.speakDetectionResults(testDetections);
+        }
+
+        // Раскомментируй для теста:
+        // setTimeout(testSpeech, 3000);
+    </script>
+
     <script src="app.js"></script>
 </body>
 </html>
