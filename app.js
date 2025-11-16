@@ -112,7 +112,6 @@ class NavigationAssistant {
         }
     }
 
-Мурта, [16.11.2025 8:27]
 async startDetection() {
         if (!this.isRunning) return;
         
@@ -216,7 +215,6 @@ async startDetection() {
         return 'впереди';
     }
 
-Мурта, [16.11.2025 8:27]
 getDistance(bbox) {
         const [,, width, height] = bbox;
         const size = width * height;
@@ -328,3 +326,4 @@ window.navigationAssistant = null;
 setTimeout(() => {
     window.navigationAssistant = new NavigationAssistant();
 }, 100);
+
