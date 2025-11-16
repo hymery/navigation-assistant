@@ -4,48 +4,120 @@ class NavigationAssistant {
         this.mainBtn = document.getElementById('mainBtn');
         this.status = document.getElementById('status');
         this.warning = document.getElementById('warning');
+        this.audioInfo = document.getElementById('audioInfo');
+        this.debug = document.getElementById('debug');
+        this.videoOverlay = document.getElementById('videoOverlay');
         
         this.isRunning = false;
         this.model = null;
         this.lastVoiceTime = 0;
         this.audioContext = null;
+        this.audioEnabled = false;
+        this.debugMode = true;
         
         this.init();
     }
 
     async init() {
-        console.log('🚀 Инициализация навигационного помощника...');
+        this.log('🚀 Инициализация навигационного помощника...');
         
         if (window.Telegram && Telegram.WebApp) {
             Telegram.WebApp.expand();
         }
         
         this.mainBtn.addEventListener('click', () => this.toggleNavigation());
-        this.setupAudio();
+        await this.setupAudio();
         await this.loadModel();
+        
+        // Показать информацию об аудио
+        this.audioInfo.style.display = 'block';
     }
 
-    setupAudio() {
+    async setupAudio() {
+        this.log('🎵 Настройка аудиосистемы...');
+        
         // Разблокируем аудио при первом клике
-        document.addEventListener('click', () => {
+        const unlockAudio = () => {
+            this.log('👆 Клик для разблокировки аудио');
+            
             if (!this.audioContext) {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.log('✅ AudioContext создан');
             }
-        }, { once: true });
+            
+            if (this.audioContext.state === 'suspended') {
+                this.audioContext.resume().then(() => {
+                    this.log('✅ AudioContext активирован');
+                    this.audioEnabled = true;
+                    this.audioInfo.style.display = 'none';
+                });
+            }
+            
+            // Тестируем TTS
+            this.testTTS();
+        };
+        
+        // Вешаем на несколько элементов для надежности
+        document.addEventListener('click', unlockAudio, { once: true });
+        this.mainBtn.addEventListener('click', unlockAudio, { once: true });
+        
+        // Проверяем поддержку TTS
+        this.checkTTSSupport();
+    }
+
+    checkTTSSupport() {
+        if (!'speechSynthesis' in window) {
+            this.log('❌ TTS не поддерживается браузером');
+            return false;
+        }
+        
+        const voices = speechSynthesis.getVoices();
+        const russianVoices = voices.filter(voice => voice.lang.includes('ru'));
+        this.log(`✅ TTS доступен, русских голосов: ${russianVoices.length}`);
+        
+        return russianVoices.length > 0;
+    }
+
+    async testTTS() {
+        return new Promise((resolve) => {
+            if (!'speechSynthesis' in window) {
+                resolve(false);
+                return;
+            }
+            
+            const testUtterance = new SpeechSynthesisUtterance();
+            testUtterance.text = ' ';
+            testUtterance.volume = 0.1;
+            testUtterance.onend = () => {
+                this.log('✅ TTS тест пройден');
+                resolve(true);
+            };
+            testUtterance.onerror = () => {
+                this.log('❌ TTS тест не пройден');
+                resolve(false);
+            };
+            
+            speechSynthesis.speak(testUtterance);
+        });
     }
 
     async loadModel() {
         try {
             this.updateStatus('ЗАГРУЗКА НЕЙРОСЕТИ...');
+            this.log('📦 Загрузка модели COCO-SSD...');
+            
             this.model = await cocoSsd.load();
             this.mainBtn.disabled = false;
             this.mainBtn.textContent = '🚀 АКТИВИРОВАТЬ СКАНИРОВАНИЕ';
-            this.updateStatus('✅ СИСТЕМА ГОТОВА');
+            this.updateStatus('✅ СИСТЕМА ГОТОВА - НАЖМИТЕ ДЛЯ СТАРТА');
+            this.log('✅ Модель загружена успешно');
+            
         } catch (error) {
             console.error('Ошибка загрузки модели:', error);
-            this.updateStatus('❌ ОШИБКА ЗАГРУЗКИ');
+            this.updateStatus('❌ ОШИБКА ЗАГРУЗКИ AI');
             this.mainBtn.textContent = '🚀 АКТИВИРОВАТЬ (БЕЗ AI)';
             this.mainBtn.disabled = false;
+            this.log('❌ Ошибка загрузки модели: ' + error.message);
         }
     }
 
@@ -60,34 +132,43 @@ class NavigationAssistant {
     async startNavigation() {
         try {
             this.updateStatus('АКТИВАЦИЯ КАМЕРЫ...');
+            this.log('📷 Запрос доступа к камере...');
             
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment' }
+                video: { 
+                    facingMode: 'environment',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
             });
             
             this.video.srcObject = stream;
+            this.videoOverlay.textContent = 'Камера активна';
             
             await new Promise((resolve) => {
                 this.video.onloadedmetadata = () => {
                     this.video.play();
+                    this.log(`✅ Камера: ${this.video.videoWidth}x${this.video.videoHeight}`);
                     resolve();
                 };
             });
             
             this.isRunning = true;
             this.mainBtn.textContent = '⏹ ОСТАНОВИТЬ СКАНИРОВАНИЕ';
-            this.updateStatus('🔍 СКАНИРОВАНИЕ АКТИВНО');
+            this.updateStatus('🔍 СКАНИРОВАНИЕ АКТИВНО - ИЩУ ОБЪЕКТЫ');
             
             // Озвучка с задержкой для телефона
             setTimeout(() => {
                 this.speak('Сканирование активировано');
-            }, 1000);
+            }, 500);
             
             this.startDetection();
             
         } catch (error) {
-            this.updateStatus('❌ ОШИБКА КАМЕРЫ');
+            console.error('Ошибка камеры:', error);
+            this.updateStatus('❌ ОШИБКА КАМЕРЫ - ПРОВЕРЬТЕ РАЗРЕШЕНИЯ');
             this.speak('Ошибка камеры');
+            this.log('❌ Ошибка камеры: ' + error.message);
         }
     }
 
@@ -98,12 +179,14 @@ class NavigationAssistant {
             const predictions = await this.model.detect(this.video);
             const filtered = this.filterObjects(predictions);
             this.processObjects(filtered);
+            
         } catch (error) {
             console.error('Ошибка обнаружения:', error);
+            this.log('❌ Ошибка обнаружения: ' + error.message);
         }
 
         if (this.isRunning) {
-            setTimeout(() => this.startDetection(), 2000);
+            setTimeout(() => this.startDetection(), 1500);
         }
     }
 
@@ -116,42 +199,50 @@ class NavigationAssistant {
         ];
         
         return predictions
-            .filter(pred => pred.score > 0.5 && targetClasses.includes(pred.class))
-            .sort((a, b) => b.score - a.score);
+            .filter(pred => pred.score > 0.4 && targetClasses.includes(pred.class))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 3); // Ограничиваем 3 самыми уверенными
     }
 
     processObjects(objects) {
         if (objects.length === 0) {
-            this.updateStatus('ОБЪЕКТЫ НЕ ОБНАРУЖЕНЫ');
+            this.updateStatus('🔍 ОБЪЕКТЫ НЕ ОБНАРУЖЕНЫ...');
+            this.videoOverlay.textContent = 'Объекты не найдены';
             return;
         }
         
         const mainObject = objects[0];
         const now = Date.now();
         
-        if (now - this.lastVoiceTime < 4000) return;
+        // Ограничиваем частоту озвучки
+        if (now - this.lastVoiceTime < 3000) return;
         
         const direction = this.getDirection(mainObject.bbox);
         const distance = this.getDistance(mainObject.bbox);
         const name = this.getRussianName(mainObject.class);
+        const confidence = Math.round(mainObject.score * 100);
         const dangerous = this.isDangerous(mainObject.class, distance);
         
+        // Обновляем оверлей
+        this.videoOverlay.textContent = `${name} ${direction} ${distance} (${confidence}%)`;
+        
         if (dangerous) {
-            this.warning.textContent = `⚠️ ${name} ${direction} ${distance}М`;
+            this.warning.textContent = `⚠️ ОПАСНОСТЬ! ${name} ${direction} ${distance}`;
             this.warning.style.display = 'block';
             this.speak(`Внимание! ${name} ${direction} в ${distance} метрах`);
-            this.updateStatus(`⚠️ ${name} ${direction}`);
+            this.updateStatus(`⚠️ ${name} ${direction} ${distance}`);
         } else {
             this.warning.style.display = 'none';
             this.speak(`${name} ${direction} в ${distance} метрах`);
-            this.updateStatus(`${name} ${direction} ${distance}М`);
+            this.updateStatus(`${name} ${direction} ${distance}`);
         }
         
         this.lastVoiceTime = now;
+        this.log(`🎯 Обнаружен: ${name} ${direction} ${distance} (${confidence}%)`);
     }
 
     getDirection(bbox) {
-        const [x, width] = bbox;
+        const [x, , width] = bbox;
         const centerX = x + width / 2;
         
         if (!this.video.videoWidth) return 'впереди';
@@ -197,16 +288,15 @@ class NavigationAssistant {
         return dangerous.includes(className) && close;
     }
 
-    // 🔥 УЛУЧШЕННАЯ ОЗВУЧКА ДЛЯ ТЕЛЕФОНА
     async speak(text) {
-        console.log('🔊 Озвучка:', text);
+        this.log(`🔊 Озвучка: "${text}"`);
         
         // Сначала пробуем браузерный TTS
         const ttsSuccess = await this.speakWithBrowserTTS(text);
         
         if (!ttsSuccess) {
             // Если не сработало - звуковые сигналы
-            this.playFallbackSound(text);
+            await this.playFallbackSound(text);
         }
     }
 
@@ -217,41 +307,47 @@ class NavigationAssistant {
                 return;
             }
             
+            // Отменяем предыдущую речь
             speechSynthesis.cancel();
             
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'ru-RU';
-            utterance.rate = 0.85;
-            utterance.pitch = 1.1;
+            utterance.rate = 0.9;
+            utterance.pitch = 1.0;
             utterance.volume = 1.0;
             
             utterance.onstart = () => {
-                console.log('✅ TTS начал говорить');
+                this.log('✅ TTS начал говорить');
             };
             
             utterance.onend = () => {
-                console.log('✅ TTS завершил');
+                this.log('✅ TTS завершил');
                 resolve(true);
             };
             
             utterance.onerror = (event) => {
-                console.log('❌ TTS ошибка:', event.error);
+                this.log('❌ TTS ошибка: ' + event.error);
                 resolve(false);
             };
             
-            // Для телефонов добавляем задержку
+            // Задержка для стабильности на телефонах
             setTimeout(() => {
                 speechSynthesis.speak(utterance);
-            }, 100);
+            }, 50);
         });
     }
 
-    playFallbackSound(text) {
+    async playFallbackSound(text) {
         if (!this.audioContext) {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
         
         try {
+            // Активируем контекст
+            if (this.audioContext.state === 'suspended') {
+                await this.audioContext.resume();
+            }
+            
             const oscillator = this.audioContext.createOscillator();
             const gainNode = this.audioContext.createGain();
             
@@ -262,27 +358,23 @@ class NavigationAssistant {
             if (text.includes('Внимание')) {
                 // Прерывистый сигнал для опасности
                 oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime);
-                setTimeout(() => {
-                    oscillator.frequency.setValueAtTime(600, this.audioContext.currentTime + 0.1);
-                }, 100);
-                setTimeout(() => {
-                    oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime + 0.2);
-                }, 200);
+                oscillator.frequency.setValueAtTime(600, this.audioContext.currentTime + 0.2);
+                oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime + 0.4);
             } else {
                 // Плавный тон для обычных сообщений
-                oscillator.frequency.setValueAtTime(400, this.audioContext.currentTime);
+                oscillator.frequency.setValueAtTime(500, this.audioContext.currentTime);
             }
             
             gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.8);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.6);
             
             oscillator.start(this.audioContext.currentTime);
-            oscillator.stop(this.audioContext.currentTime + 0.8);
+            oscillator.stop(this.audioContext.currentTime + 0.6);
             
-            console.log('🔊 Звуковой сигнал для:', text);
+            this.log('🔊 Воспроизведен звуковой сигнал');
             
         } catch (error) {
-            console.log('❌ Ошибка звукового сигнала:', error);
+            this.log('❌ Ошибка звукового сигнала: ' + error.message);
         }
     }
 
@@ -302,18 +394,45 @@ class NavigationAssistant {
         
         // Возвращаем кнопку в исходное состояние
         this.mainBtn.textContent = '🚀 АКТИВИРОВАТЬ СКАНИРОВАНИЕ';
-        this.updateStatus('✅ СКАНИРИОВАНИЕ ОСТАНОВЛЕНО');
+        this.updateStatus('✅ СКАНИРОВАНИЕ ОСТАНОВЛЕНО');
         this.warning.style.display = 'none';
+        this.videoOverlay.textContent = 'Камера не активна';
         
         this.speak('Сканирование остановлено');
+        this.log('⏹ Сканирование остановлено');
     }
 
     updateStatus(message) {
         this.status.textContent = message;
     }
+
+    log(message) {
+        console.log(message);
+        if (this.debugMode) {
+            const timestamp = new Date().toLocaleTimeString();
+            this.debug.innerHTML = `[${timestamp}] ${message}<br>` + this.debug.innerHTML;
+            this.debug.style.display = 'block';
+        }
+    }
 }
 
-// Запуск
+// Запуск приложения
 window.addEventListener('load', () => {
     new NavigationAssistant();
+});
+
+// Показать отладочную информацию при долгом нажатии на заголовок
+document.addEventListener('DOMContentLoaded', () => {
+    const header = document.querySelector('.header');
+    let pressTimer;
+    
+    header.addEventListener('touchstart', (e) => {
+        pressTimer = setTimeout(() => {
+            document.getElementById('debug').style.display = 'block';
+        }, 2000);
+    });
+    
+    header.addEventListener('touchend', () => {
+        clearTimeout(pressTimer);
+    });
 });
