@@ -41,12 +41,24 @@
             justify-content: center;
             border: 4px solid #00ff00;
             margin: 10px;
+            position: relative;
+            min-height: 300px;
         }
         
         #webcam {
             width: 100%;
             height: 100%;
             object-fit: cover;
+        }
+        
+        .video-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
         }
         
         .controls {
@@ -64,12 +76,21 @@
             font-size: 24px;
             font-weight: bold;
             cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .main-btn:hover {
+            background: #00cc00;
         }
         
         .main-btn:disabled {
             background: #666666;
             color: #cccccc;
             cursor: not-allowed;
+        }
+        
+        .main-btn:active {
+            transform: scale(0.98);
         }
         
         .status {
@@ -79,6 +100,10 @@
             text-align: center;
             font-size: 18px;
             font-weight: bold;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
         .warning {
@@ -89,6 +114,32 @@
             font-size: 20px;
             font-weight: bold;
             display: none;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        
+        .audio-info {
+            background: #333333;
+            color: #00ff00;
+            padding: 10px;
+            text-align: center;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .debug {
+            background: #111111;
+            color: #cccccc;
+            padding: 10px;
+            font-size: 12px;
+            display: none;
+            max-height: 100px;
+            overflow-y: auto;
         }
     </style>
 </head>
@@ -99,6 +150,11 @@
     
     <div class="video-container">
         <video id="webcam" autoplay playsinline muted></video>
+        <div class="video-overlay" id="videoOverlay">Камера не активна</div>
+    </div>
+    
+    <div class="audio-info" id="audioInfo">
+        🔊 Для работы звука: 1) Разрешите автовоспроизведение 2) Увеличьте громкость медиа 3) Отключите беззвучный режим
     </div>
     
     <div class="controls">
@@ -108,6 +164,8 @@
     <div class="status" id="status">Загрузка нейросети...</div>
     
     <div class="warning" id="warning"></div>
+    
+    <div class="debug" id="debug"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
