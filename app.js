@@ -36,12 +36,22 @@ class NavigationAssistant {
     async loadModel() {
         try {
             this.updateStatus('ЗАГРУЗКА НЕЙРОСЕТИ...');
+            
+            // Инициализируем TensorFlow.js
+            await tf.ready();
+            console.log('TensorFlow.js готов:', tf.getBackend());
+            
+            // Загружаем стандартную модель COCO-SSD
             this.model = await cocoSsd.load();
+            console.log('Модель COCO-SSD загружена');
+            
             this.mainBtn.disabled = false;
             this.mainBtn.textContent = '🚀 АКТИВИРОВАТЬ СКАНИРОВАНИЕ';
             this.updateStatus('✅ СИСТЕМА ГОТОВА');
+            
         } catch (error) {
-            this.updateStatus('❌ ОШИБКА ЗАГРУЗКИ');
+            console.error('Ошибка загрузки модели:', error);
+            this.updateStatus('❌ ОШИБКА ЗАГРУЗКИ AI');
             this.mainBtn.textContent = '🚀 АКТИВИРОВАТЬ (БЕЗ AI)';
             this.mainBtn.disabled = false;
         }
@@ -61,9 +71,7 @@ class NavigationAssistant {
             
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { 
-                    facingMode: 'environment',
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
+                    facingMode: 'environment'
                 }
             });
             
@@ -87,18 +95,20 @@ class NavigationAssistant {
             this.startDetection();
             
         } catch (error) {
+            console.error('Ошибка камеры:', error);
             this.updateStatus('❌ ОШИБКА КАМЕРЫ');
             this.speak('Ошибка камеры');
         }
     }
 
     async startDetection() {
-        if (!this.isRunning) return;
+        if (!this.isRunning || !this.model) return;
         
         const detect = async () => {
-            if (!this.isRunning || this.isSpeaking) return;
+            if (!this.isRunning || this.isSpeaking || !this.model) return;
             
             try {
+                // Используем стандартный вызов модели COCO-SSD
                 const predictions = await this.model.detect(this.video);
                 const filtered = this.filterObjects(predictions);
                 await this.processObjects(filtered);
@@ -139,18 +149,15 @@ class NavigationAssistant {
         const name = this.getRussianName(mainObject.class);
         const dangerous = this.isDangerous(mainObject.class, distance);
         
-        // Формируем текст для отображения (с дефисами)
         const displayDistance = distance.replace(' ', '-');
         
         if (dangerous) {
             this.warning.textContent = `⚠️ ${name} ${direction} ${displayDistance}`;
             this.warning.style.display = 'block';
-            // Для озвучки используем текст без проговаривания дефиса
             await this.speak(`Внимание ${name} ${direction} ${distance} метров`);
             this.updateStatus(`⚠️ ${name} ${direction} ${displayDistance}`);
         } else {
             this.warning.style.display = 'none';
-            // Для озвучки используем текст без проговаривания дефиса
             await this.speak(`${name} ${direction} ${distance} метров`);
             this.updateStatus(`${name} ${direction} ${displayDistance}`);
         }
@@ -179,7 +186,6 @@ class NavigationAssistant {
         const maxSize = this.video.videoWidth * this.video.videoHeight;
         const percent = size / maxSize;
         
-        // Возвращаем расстояние с пробелом для озвучки
         if (percent > 0.35) return '1 2';
         if (percent > 0.20) return '3 4';
         if (percent > 0.12) return '5 6';
@@ -209,12 +215,14 @@ class NavigationAssistant {
     }
 
     async speak(text) {
+        if (this.isSpeaking) return;
+        
         this.isSpeaking = true;
         
         const ttsSuccess = await this.speakWithBrowserTTS(text);
         
         if (!ttsSuccess) {
-            this.playFallbackSound(text);
+            await this.playFallbackSound(text);
         }
         
         this.isSpeaking = false;
@@ -317,6 +325,7 @@ class NavigationAssistant {
     }
 }
 
+// Запуск приложения
 window.addEventListener('load', () => {
     new NavigationAssistant();
 });
