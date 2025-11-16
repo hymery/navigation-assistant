@@ -8,10 +8,7 @@ class NavigationAssistant {
         this.isRunning = false;
         this.model = null;
         this.lastVoiceTime = 0;
-        
-        // Яндекс SpeechKit настройки
-        this.yandexToken = 'ajenblfsa0oup3hjtv7i';
-        this.yandexFolder = 'b1gj8glojqbh843o2iq5';
+        this.audioContext = null;
         
         this.init();
     }
@@ -24,7 +21,17 @@ class NavigationAssistant {
         }
         
         this.mainBtn.addEventListener('click', () => this.toggleNavigation());
+        this.setupAudio();
         await this.loadModel();
+    }
+
+    setupAudio() {
+        // Разблокируем аудио при первом клике
+        document.addEventListener('click', () => {
+            if (!this.audioContext) {
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }, { once: true });
     }
 
     async loadModel() {
@@ -70,7 +77,11 @@ class NavigationAssistant {
             this.isRunning = true;
             this.mainBtn.textContent = '⏹ ОСТАНОВИТЬ СКАНИРОВАНИЕ';
             this.updateStatus('🔍 СКАНИРОВАНИЕ АКТИВНО');
-            this.speak('Сканирование активировано');
+            
+            // Озвучка с задержкой для телефона
+            setTimeout(() => {
+                this.speak('Сканирование активировано');
+            }, 1000);
             
             this.startDetection();
             
@@ -128,11 +139,11 @@ class NavigationAssistant {
         if (dangerous) {
             this.warning.textContent = `⚠️ ${name} ${direction} ${distance}М`;
             this.warning.style.display = 'block';
-            this.speak(`ВНИМАНИЕ! ${name} ${direction} ${distance} МЕТРОВ`);
+            this.speak(`Внимание! ${name} ${direction} в ${distance} метрах`);
             this.updateStatus(`⚠️ ${name} ${direction}`);
         } else {
             this.warning.style.display = 'none';
-            this.speak(`${name} ${direction} ${distance} МЕТРОВ`);
+            this.speak(`${name} ${direction} в ${distance} метрах`);
             this.updateStatus(`${name} ${direction} ${distance}М`);
         }
         
@@ -186,70 +197,92 @@ class NavigationAssistant {
         return dangerous.includes(className) && close;
     }
 
-    // 🔥 НОВАЯ ОЗВУЧКА ЧЕРЕЗ ЯНДЕКС SPEECHKIT
+    // 🔥 УЛУЧШЕННАЯ ОЗВУЧКА ДЛЯ ТЕЛЕФОНА
     async speak(text) {
         console.log('🔊 Озвучка:', text);
         
-        try {
-            // Пробуем Яндекс SpeechKit
-            await this.speakWithYandexTTS(text);
-        } catch (error) {
-            console.log('❌ Яндекс TTS не сработал:', error);
-            // Запасной вариант - браузерный TTS
-            this.speakWithBrowserTTS(text);
+        // Сначала пробуем браузерный TTS
+        const ttsSuccess = await this.speakWithBrowserTTS(text);
+        
+        if (!ttsSuccess) {
+            // Если не сработало - звуковые сигналы
+            this.playFallbackSound(text);
         }
     }
 
-    async speakWithYandexTTS(text) {
-        const url = `https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize`;
-        
-        const formData = new FormData();
-        formData.append('text', text);
-        formData.append('lang', 'ru-RU');
-        formData.append('voice', 'alena'); // Естественный женский голос
-        formData.append('emotion', 'good');
-        formData.append('speed', '1.0');
-        formData.append('format', 'lpcm');
-        formData.append('sampleRateHertz', '48000');
-        formData.append('folderId', this.yandexFolder);
-        
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${this.yandexToken}`
-            },
-            body: formData
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Yandex TTS error: ${response.status}`);
-        }
-        
-        const audioData = await response.arrayBuffer();
-        await this.playAudioBuffer(audioData);
-    }
-
-    async playAudioBuffer(audioBuffer) {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const decodedData = await audioContext.decodeAudioData(audioBuffer);
-        
-        const source = audioContext.createBufferSource();
-        source.buffer = decodedData;
-        source.connect(audioContext.destination);
-        source.start();
-        
+    async speakWithBrowserTTS(text) {
         return new Promise((resolve) => {
-            source.onended = resolve;
-        });
-    }
-
-    speakWithBrowserTTS(text) {
-        if ('speechSynthesis' in window) {
+            if (!'speechSynthesis' in window) {
+                resolve(false);
+                return;
+            }
+            
             speechSynthesis.cancel();
+            
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'ru-RU';
-            utterance.rate = 0.9;
-            speechSynthesis.speak(utterance);
+            utterance.rate = 0.85;
+            utterance.pitch = 1.1;
+            utterance.volume = 1.0;
+            
+            utterance.onstart = () => {
+                console.log('✅ TTS начал говорить');
+            };
+            
+            utterance.onend = () => {
+                console.log('✅ TTS завершил');
+                resolve(true);
+            };
+            
+            utterance.onerror = (event) => {
+                console.log('❌ TTS ошибка:', event.error);
+                resolve(false);
+            };
+            
+            // Для телефонов добавляем задержку
+            setTimeout(() => {
+                speechSynthesis.speak(utterance);
+            }, 100);
+        });
+    }
+
+    playFallbackSound(text) {
+        if (!this.audioContext) {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        
+        try {
+            const oscillator = this.audioContext.createOscillator();
+            const gainNode = this.audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(this.audioContext.destination);
+            
+            // Разные сигналы для разных сообщений
+            if (text.includes('Внимание')) {
+                // Прерывистый сигнал для опасности
+                oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime);
+                setTimeout(() => {
+                    oscillator.frequency.setValueAtTime(600, this.audioContext.currentTime + 0.1);
+                }, 100);
+                setTimeout(() => {
+                    oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime + 0.2);
+                }, 200);
+            } else {
+                // Плавный тон для обычных сообщений
+                oscillator.frequency.setValueAtTime(400, this.audioContext.currentTime);
+            }
+            
+            gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.8);
+            
+            oscillator.start(this.audioContext.currentTime);
+            oscillator.stop(this.audioContext.currentTime + 0.8);
+            
+            console.log('🔊 Звуковой сигнал для:', text);
+            
+        } catch (error) {
+            console.log('❌ Ошибка звукового сигнала:', error);
         }
     }
 
@@ -269,7 +302,7 @@ class NavigationAssistant {
         
         // Возвращаем кнопку в исходное состояние
         this.mainBtn.textContent = '🚀 АКТИВИРОВАТЬ СКАНИРОВАНИЕ';
-        this.updateStatus('✅ СКАНИРОВАНИЕ ОСТАНОВЛЕНО');
+        this.updateStatus('✅ СКАНИРИОВАНИЕ ОСТАНОВЛЕНО');
         this.warning.style.display = 'none';
         
         this.speak('Сканирование остановлено');
