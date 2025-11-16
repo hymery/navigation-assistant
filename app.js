@@ -1,3 +1,4 @@
+hymery, [16.11.2025 10:22]
 class NavigationAssistant {
     constructor() {
         this.video = document.getElementById('webcam');
@@ -29,7 +30,7 @@ class NavigationAssistant {
         // Разблокируем аудио при первом клике
         document.addEventListener('click', () => {
             if (!this.audioContext) {
-                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.audioContext = new (window.AudioContext  window.webkitAudioContext)();
             }
         }, { once: true });
     }
@@ -75,7 +76,7 @@ class NavigationAssistant {
             });
             
             this.isRunning = true;
-            this.mainBtn.textContent = '⏹ ОСТАНОВИТЬ СКАНИРОВАНИЕ';
+            this.mainBtn.textContent = '⏹️ ОСТАНОВИТЬ СКАНИРОВАНИЕ';
             this.updateStatus('🔍 СКАНИРОВАНИЕ АКТИВНО');
             
             // Озвучка с задержкой для телефона
@@ -128,8 +129,9 @@ class NavigationAssistant {
         
         const mainObject = objects[0];
         const now = Date.now();
-        
-        if (now - this.lastVoiceTime < 4000) return;
+
+hymery, [16.11.2025 10:22]
+if (now - this.lastVoiceTime < 4000) return;
         
         const direction = this.getDirection(mainObject.bbox);
         const distance = this.getDistance(mainObject.bbox);
@@ -166,7 +168,7 @@ class NavigationAssistant {
         const [,, width, height] = bbox;
         const size = width * height;
         
-        if (!this.video.videoWidth || !this.video.videoHeight) return '5-7';
+        if (!this.video.videoWidth  !this.video.videoHeight) return '5-7';
         
         const maxSize = this.video.videoWidth * this.video.videoHeight;
         const percent = size / maxSize;
@@ -188,12 +190,12 @@ class NavigationAssistant {
             'bed': 'кровать', 'traffic light': 'светофор',
             'stop sign': 'знак остановки', 'bench': 'скамейка'
         };
-        return names[englishName] || englishName;
+        return names[englishName]  englishName;
     }
 
     isDangerous(className, distance) {
         const dangerous = ['car', 'truck', 'bus', 'motorcycle', 'train'];
-        const close = distance.includes('1-2') || distance.includes('3-4');
+        const close = distance.includes('1-2')  distance.includes('3-4');
         return dangerous.includes(className) && close;
     }
 
@@ -246,7 +248,8 @@ class NavigationAssistant {
         });
     }
 
-    playFallbackSound(text) {
+hymery, [16.11.2025 10:22]
+playFallbackSound(text) {
         if (!this.audioContext) {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
