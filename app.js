@@ -107,7 +107,6 @@ class NavigationAssistant {
             }
         };
         
-        // Анализ каждые 1.5 секунды
         this.detectionInterval = setInterval(detect, 1500);
     }
 
@@ -140,15 +139,20 @@ class NavigationAssistant {
         const name = this.getRussianName(mainObject.class);
         const dangerous = this.isDangerous(mainObject.class, distance);
         
+        // Формируем текст для отображения (с дефисами)
+        const displayDistance = distance.replace(' ', '-');
+        
         if (dangerous) {
-            this.warning.textContent = `⚠️ ${name} ${direction} ${distance}`;
+            this.warning.textContent = `⚠️ ${name} ${direction} ${displayDistance}`;
             this.warning.style.display = 'block';
-            await this.speak(`Внимание! ${name} ${direction} в ${distance} метрах`);
-            this.updateStatus(`⚠️ ${name} ${direction} ${distance}`);
+            // Для озвучки используем текст без проговаривания дефиса
+            await this.speak(`Внимание ${name} ${direction} ${distance} метров`);
+            this.updateStatus(`⚠️ ${name} ${direction} ${displayDistance}`);
         } else {
             this.warning.style.display = 'none';
-            await this.speak(`${name} ${direction} в ${distance} метрах`);
-            this.updateStatus(`${name} ${direction} ${distance}`);
+            // Для озвучки используем текст без проговаривания дефиса
+            await this.speak(`${name} ${direction} ${distance} метров`);
+            this.updateStatus(`${name} ${direction} ${displayDistance}`);
         }
         
         this.lastVoiceTime = now;
@@ -170,17 +174,18 @@ class NavigationAssistant {
         const [,, width, height] = bbox;
         const size = width * height;
         
-        if (!this.video.videoWidth || !this.video.videoHeight) return '7-8';
+        if (!this.video.videoWidth || !this.video.videoHeight) return '7 8';
         
         const maxSize = this.video.videoWidth * this.video.videoHeight;
         const percent = size / maxSize;
         
-        if (percent > 0.35) return '1-2';
-        if (percent > 0.20) return '3-4';
-        if (percent > 0.12) return '5-6';
-        if (percent > 0.07) return '7-8';
-        if (percent > 0.04) return '9-10';
-        return '11-12';
+        // Возвращаем расстояние с пробелом для озвучки
+        if (percent > 0.35) return '1 2';
+        if (percent > 0.20) return '3 4';
+        if (percent > 0.12) return '5 6';
+        if (percent > 0.07) return '7 8';
+        if (percent > 0.04) return '9 10';
+        return '11 12';
     }
 
     getRussianName(englishName) {
@@ -199,7 +204,7 @@ class NavigationAssistant {
 
     isDangerous(className, distance) {
         const dangerous = ['car', 'truck', 'bus', 'motorcycle', 'train'];
-        const close = distance.includes('1-2') || distance.includes('3-4') || distance.includes('5-6');
+        const close = distance.includes('1 2') || distance.includes('3 4') || distance.includes('5 6');
         return dangerous.includes(className) && close;
     }
 
