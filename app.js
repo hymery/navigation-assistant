@@ -16,21 +16,17 @@ class NavigationAssistant {
     async init() {
         console.log('🚀 Инициализация навигационного помощника...');
         
-        // Telegram Web App
         if (window.Telegram && Telegram.WebApp) {
             Telegram.WebApp.expand();
         }
         
-        // Инициализация системы озвучки
         await this.initSpeechSynthesizer();
-        
         this.mainBtn.addEventListener('click', () => this.toggleNavigation());
         await this.loadModel();
     }
 
     async initSpeechSynthesizer() {
         try {
-            // Используем глобальный синтезатор из HTML или создаем новый
             if (window.speechSynthesizer) {
                 this.speechSynthesizer = window.speechSynthesizer;
                 console.log('✅ Система озвучки подключена');
@@ -38,7 +34,6 @@ class NavigationAssistant {
                 console.warn('⚠️ Глобальная система озвучки не найдена, используем встроенную');
                 this.speechSynthesizer = {
                     speakDetectionResults: (detections) => {
-                        // Фолбэк на стандартный синтез речи
                         const text = this.generateSpeechFromDetections(detections);
                         this.speak(text);
                     },
@@ -60,7 +55,6 @@ class NavigationAssistant {
             this.mainBtn.textContent = '🚀 АКТИВИРОВАТЬ СКАНИРОВАНИЕ';
             this.updateStatus('✅ СИСТЕМА ГОТОВА');
             
-            // Тестовое сообщение о готовности
             setTimeout(() => {
                 this.speak('Система навигации готова к работе');
             }, 1000);
@@ -112,7 +106,7 @@ class NavigationAssistant {
         }
     }
 
-async startDetection() {
+    async startDetection() {
         if (!this.isRunning) return;
         
         try {
@@ -128,13 +122,12 @@ async startDetection() {
         }
     }
 
-    filterObjects(predictions) {
+filterObjects(predictions) {
         const targetClasses = [
-            'person', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', // Люди и животные
-            'car', 'truck', 'bus', 'motorcycle', 'bicycle', 'train', // Транспорт
-            'chair', 'couch', 'potted plant', 'bed', // Препятствия
-            'traffic light', 'stop sign', 'bench', // Инфраструктура
-            'backpack', 'umbrella', 'handbag', 'tie', 'suitcase' // Личные вещи
+            'person', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
+            'car', 'truck', 'bus', 'motorcycle', 'bicycle', 'train',
+            'chair', 'couch', 'potted plant', 'bed',
+            'traffic light', 'stop sign', 'bench', 'backpack', 'umbrella', 'handbag', 'tie', 'suitcase'
         ];
         
         return predictions
@@ -145,7 +138,6 @@ async startDetection() {
     processObjects(objects) {
         if (objects.length === 0) {
             this.updateStatus('ОБЪЕКТЫ НЕ ОБНАРУЖЕНЫ');
-            // Озвучиваем только если долго нет объектов
             if (Date.now() - this.lastVoiceTime > 8000) {
                 this.speak('Объекты не обнаружены, продолжайте движение');
                 this.lastVoiceTime = Date.now();
@@ -156,7 +148,6 @@ async startDetection() {
         const mainObject = objects[0];
         const now = Date.now();
         
-        // Ограничиваем частоту озвучки
         if (now - this.lastVoiceTime < 4000) return;
         
         const direction = this.getDirection(mainObject.bbox);
@@ -164,11 +155,9 @@ async startDetection() {
         const name = this.getRussianName(mainObject.class);
         const dangerous = this.isDangerous(mainObject.class, distance);
         
-        // Используем Yandex SpeechKit для озвучки
         if (this.speechSynthesizer && this.speechSynthesizer.speakDetectionResults) {
             this.speechSynthesizer.speakDetectionResults(objects);
         } else {
-            // Фолбэк на старую систему
             if (dangerous) {
                 this.warning.textContent = ⚠️ ${name} ${direction} ${distance}М;
                 this.warning.style.display = 'block';
@@ -184,7 +173,6 @@ async startDetection() {
         this.lastVoiceTime = now;
     }
 
-    // Генерация речи для фолбэка
     generateSpeechFromDetections(detections) {
         if (!detections || detections.length === 0) {
             return "Объекты не обнаружены";
@@ -215,7 +203,7 @@ async startDetection() {
         return 'впереди';
     }
 
-getDistance(bbox) {
+    getDistance(bbox) {
         const [,, width, height] = bbox;
         const size = width * height;
         
@@ -236,7 +224,8 @@ getDistance(bbox) {
             'bird': 'птица', 'cat': 'кошка', 'dog': 'собака',
             'horse': 'лошадь', 'sheep': 'овца', 'cow': 'корова',
             'car': 'автомобиль', 'truck': 'грузовик', 'bus': 'автобус',
-            'motorcycle': 'мотоцикл', 'bicycle': 'велосипед', 'train': 'поезд',
+            
+'motorcycle': 'мотоцикл', 'bicycle': 'велосипед', 'train': 'поезд',
             'chair': 'стул', 'couch': 'диван', 'potted plant': 'растение',
             'bed': 'кровать', 'traffic light': 'светофор',
             'stop sign': 'знак остановки', 'bench': 'скамейка',
@@ -253,7 +242,6 @@ getDistance(bbox) {
     }
 
     speak(text) {
-        // Используем Yandex SpeechKit если доступен, иначе стандартный синтез
         if (this.speechSynthesizer && this.speechSynthesizer.synthesizeAndPlay) {
             this.speechSynthesizer.synthesizeAndPlay(text).catch(error => {
                 console.warn('Yandex SpeechKit недоступен, используем стандартный синтез');
@@ -278,7 +266,6 @@ getDistance(bbox) {
     async stopNavigation() {
         this.isRunning = false;
         
-        // Останавливаем все системы речи
         if ('speechSynthesis' in window) {
             speechSynthesis.cancel();
         }
@@ -299,7 +286,6 @@ getDistance(bbox) {
         this.status.textContent = message;
     }
 
-    // Метод для экстренных сообщений
     emergencyAlert(message) {
         if (this.speechSynthesizer && this.speechSynthesizer.speakEmergency) {
             this.speechSynthesizer.speakEmergency(message);
@@ -313,17 +299,12 @@ getDistance(bbox) {
     }
 }
 
-// Запуск приложения
 window.addEventListener('load', () => {
     console.log('🎯 Запуск навигационного помощника...');
     new NavigationAssistant();
 });
 
-// Глобальные функции для отладки
 window.navigationAssistant = null;
-
-// Автоматическое создание экземпляра с задержкой для инициализации Telegram Web App
 setTimeout(() => {
     window.navigationAssistant = new NavigationAssistant();
 }, 100);
-
