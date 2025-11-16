@@ -11,6 +11,7 @@ class NavigationAssistant {
         this.audioContext = null;
         this.detectionInterval = null;
         this.isSpeaking = false;
+        this.pendingDetection = false;
         
         this.init();
     }
@@ -80,9 +81,7 @@ class NavigationAssistant {
             this.mainBtn.textContent = '⏹ ОСТАНОВИТЬ СКАНИРОВАНИЕ';
             this.updateStatus('🔍 СКАНИРОВАНИЕ АКТИВНО');
             
-            setTimeout(() => {
-                this.speak('Сканирование активировано');
-            }, 1000);
+            this.speak('Сканирование активировано');
             
             this.startDetection();
             
@@ -96,7 +95,9 @@ class NavigationAssistant {
         if (!this.isRunning) return;
         
         const detect = async () => {
-            if (!this.isRunning || this.isSpeaking) return;
+            if (!this.isRunning || this.isSpeaking || this.pendingDetection) return;
+            
+            this.pendingDetection = true;
             
             try {
                 const predictions = await this.model.detect(this.video);
@@ -105,10 +106,12 @@ class NavigationAssistant {
             } catch (error) {
                 console.error('Ошибка обнаружения:', error);
             }
+            
+            this.pendingDetection = false;
         };
         
-        // Запускаем анализ каждые 500ms, но только если не идет озвучка
-        this.detectionInterval = setInterval(detect, 500);
+        // Увеличиваем интервал до 800ms для гарантии завершения озвучки
+        this.detectionInterval = setInterval(detect, 800);
     }
 
     filterObjects(predictions) {
@@ -119,11 +122,10 @@ class NavigationAssistant {
             'traffic light', 'stop sign', 'bench'
         ];
         
-        // Понижаем порог для лучшего обнаружения, но фильтруем по классам
         return predictions
             .filter(pred => pred.score > 0.5 && targetClasses.includes(pred.class))
             .sort((a, b) => b.score - a.score)
-            .slice(0, 2); // Берем 2 самых уверенных объекта
+            .slice(0, 2);
     }
 
     async processObjects(objects) {
@@ -135,24 +137,32 @@ class NavigationAssistant {
         const mainObject = objects[0];
         const now = Date.now();
         
-        if (now - this.lastVoiceTime < 1500) return; // Минимальная пауза между озвучками
+        if (now - this.lastVoiceTime < 1000) return;
         
         const direction = this.getDirection(mainObject.bbox);
         const distance = this.getDistance(mainObject.bbox);
         const name = this.getRussianName(mainObject.class);
         const dangerous = this.isDangerous(mainObject.class, distance);
         
+        // Формируем текст без дефисов
+        const statusText = dangerous ? 
+            `ВНИМАНИЕ ${name} ${direction} ${distance}` : 
+            `${name} ${direction} ${distance}`;
+            
+        const speechText = dangerous ?
+            `Внимание ${name} ${direction} ${distance} метров` :
+            `${name} ${direction} ${distance} метров`;
+        
         if (dangerous) {
             this.warning.textContent = `⚠️ ${name} ${direction} ${distance}`;
             this.warning.style.display = 'block';
-            await this.speak(`Внимание! ${name} ${direction} в ${distance} метрах`);
             this.updateStatus(`⚠️ ${name} ${direction} ${distance}`);
         } else {
             this.warning.style.display = 'none';
-            await this.speak(`${name} ${direction} в ${distance} метрах`);
             this.updateStatus(`${name} ${direction} ${distance}`);
         }
         
+        await this.speak(speechText);
         this.lastVoiceTime = now;
     }
 
@@ -172,18 +182,17 @@ class NavigationAssistant {
         const [,, width, height] = bbox;
         const size = width * height;
         
-        if (!this.video.videoWidth || !this.video.videoHeight) return '7-8';
+        if (!this.video.videoWidth || !this.video.videoHeight) return '7 8';
         
         const maxSize = this.video.videoWidth * this.video.videoHeight;
         const percent = size / maxSize;
         
-        // Улучшенная система дальности с более точными границами
-        if (percent > 0.35) return '1-2';
-        if (percent > 0.20) return '3-4';
-        if (percent > 0.12) return '5-6';
-        if (percent > 0.07) return '7-8';
-        if (percent > 0.04) return '9-10';
-        return '11-12';
+        if (percent > 0.35) return '1 2';
+        if (percent > 0.20) return '3 4';
+        if (percent > 0.12) return '5 6';
+        if (percent > 0.07) return '7 8';
+        if (percent > 0.04) return '9 10';
+        return '11 12';
     }
 
     getRussianName(englishName) {
@@ -202,11 +211,13 @@ class NavigationAssistant {
 
     isDangerous(className, distance) {
         const dangerous = ['car', 'truck', 'bus', 'motorcycle', 'train'];
-        const close = distance.includes('1-2') || distance.includes('3-4') || distance.includes('5-6');
+        const close = distance.includes('1 2') || distance.includes('3 4') || distance.includes('5 6');
         return dangerous.includes(className) && close;
     }
 
     async speak(text) {
+        if (this.isSpeaking) return;
+        
         this.isSpeaking = true;
         
         const ttsSuccess = await this.speakWithBrowserTTS(text);
@@ -229,21 +240,24 @@ class NavigationAssistant {
             
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'ru-RU';
-            utterance.rate = 0.9; // Немного медленнее для лучшего понимания
+            utterance.rate = 1.0; // Максимальная скорость
             utterance.pitch = 1.0;
             utterance.volume = 1.0;
             
-            utterance.onstart = () => {
-                resolve(true);
+            let completed = false;
+            
+            const complete = () => {
+                if (!completed) {
+                    completed = true;
+                    resolve(true);
+                }
             };
             
-            utterance.onend = () => {
-                resolve(true);
-            };
+            utterance.onend = complete;
+            utterance.onerror = complete;
             
-            utterance.onerror = () => {
-                resolve(false);
-            };
+            // Таймаут на случай зависания
+            setTimeout(complete, 3000);
             
             speechSynthesis.speak(utterance);
         });
@@ -264,26 +278,19 @@ class NavigationAssistant {
                 
                 if (text.includes('Внимание')) {
                     oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime);
-                    setTimeout(() => {
-                        oscillator.frequency.setValueAtTime(600, this.audioContext.currentTime + 0.1);
-                    }, 100);
-                    setTimeout(() => {
-                        oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime + 0.2);
-                    }, 200);
                 } else {
                     oscillator.frequency.setValueAtTime(400, this.audioContext.currentTime);
                 }
                 
                 gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.8);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.5);
                 
                 oscillator.start(this.audioContext.currentTime);
-                oscillator.stop(this.audioContext.currentTime + 0.8);
+                oscillator.stop(this.audioContext.currentTime + 0.5);
                 
-                setTimeout(() => resolve(), 800);
+                setTimeout(resolve, 500);
                 
             } catch (error) {
-                console.log('Ошибка звукового сигнала:', error);
                 resolve();
             }
         });
@@ -292,6 +299,7 @@ class NavigationAssistant {
     async stopNavigation() {
         this.isRunning = false;
         this.isSpeaking = false;
+        this.pendingDetection = false;
         
         if (this.detectionInterval) {
             clearInterval(this.detectionInterval);
